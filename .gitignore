@@ -1,0 +1,6 @@
+target/
+.m2/
+.idea/
+*.db
+*.log
+.env

@@ -1,0 +1,24 @@
+server:
+  port: 8000
+
+spring:
+  application:
+    name: agent4j-bilibili-workspace
+  datasource:
+    driver-class-name: org.sqlite.JDBC
+    url: jdbc:sqlite:${DB_PATH:bilibili_agents.db}
+
+app:
+  request-interval: ${REQUEST_INTERVAL:1.2}
+  db-path: ${DB_PATH:bilibili_agents.db}
+  llm-provider: ${LLM_PROVIDER:openai}
+  llm-api-key: ${LLM_API_KEY:}
+  llm-base-url: ${LLM_BASE_URL:https://zapi.aicc0.com/v1}
+  llm-model: ${LLM_MODEL:gpt-5.4}
+  llm-timeout-seconds: ${LLM_TIMEOUT_SECONDS:75}
+  llm-max-retries: ${LLM_MAX_RETRIES:2}
+  llm-retry-backoff-seconds: ${LLM_RETRY_BACKOFF_SECONDS:1.6}
+  bili-sessdata: ${BILI_SESSDATA:}
+  bili-bili-jct: ${BILI_BILI_JCT:}
+  default-partition: ${DEFAULT_PARTITION:knowledge}
+  default-peer-ups: ${DEFAULT_PEER_UPS:546195,15263701,777536}
