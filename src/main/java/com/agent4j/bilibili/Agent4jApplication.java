@@ -10,6 +10,11 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 @EnableConfigurationProperties(AppProperties.class)
 public class Agent4jApplication {
 
+    /**
+     * 启动 Spring Boot 应用。
+     *
+     * @param args 启动参数
+     */
     public static void main(String[] args) {
         DotenvLoader.load();
         SpringApplication.run(Agent4jApplication.class, args);

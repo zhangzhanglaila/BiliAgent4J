@@ -22,21 +22,43 @@ public class LlmClientService {
     private final ObjectMapper objectMapper;
     private ChatModel chatModel;
 
+    /**
+     * 创建 LLM 客户端服务。
+     *
+     * @param properties 系统配置
+     * @param objectMapper JSON 映射器
+     */
     public LlmClientService(AppProperties properties, ObjectMapper objectMapper) {
         this.properties = properties;
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 判断当前是否可使用 LLM。
+     *
+     * @return 是否已启用 LLM
+     */
     public boolean available() {
         return properties.llmEnabled();
     }
 
+    /**
+     * 校验当前环境是否允许调用 LLM。
+     */
     public void requireAvailable() {
         if (!available()) {
             throw new IllegalStateException("LLM unavailable: configure LLM_API_KEY first.");
         }
     }
 
+    /**
+     * 调用 LLM 生成 JSON，并在失败时返回回退值。
+     *
+     * @param systemPrompt 系统提示词
+     * @param userPrompt 用户提示词
+     * @param fallback 回退结果
+     * @return JSON 节点结果
+     */
     public JsonNode invokeJson(String systemPrompt, String userPrompt, Object fallback) {
         if (!available()) {
             return objectMapper.valueToTree(fallback);
@@ -48,6 +70,13 @@ public class LlmClientService {
         }
     }
 
+    /**
+     * 调用 LLM 并强制解析为 JSON。
+     *
+     * @param systemPrompt 系统提示词
+     * @param userPrompt 用户提示词
+     * @return JSON 节点结果
+     */
     public JsonNode invokeJsonRequired(String systemPrompt, String userPrompt) {
         requireAvailable();
         String text = invokeTextRequired(
@@ -57,6 +86,14 @@ public class LlmClientService {
         return JsonUtils.readTree(objectMapper, JsonUtils.extractJsonBlock(text));
     }
 
+    /**
+     * 调用 LLM 生成文本，并在失败时返回回退值。
+     *
+     * @param systemPrompt 系统提示词
+     * @param userPrompt 用户提示词
+     * @param fallback 回退文本
+     * @return 模型返回文本
+     */
     public String invokeText(String systemPrompt, String userPrompt, String fallback) {
         if (!available()) {
             return fallback;
@@ -68,6 +105,13 @@ public class LlmClientService {
         }
     }
 
+    /**
+     * 调用 LLM 生成文本，并按配置执行重试。
+     *
+     * @param systemPrompt 系统提示词
+     * @param userPrompt 用户提示词
+     * @return 模型返回文本
+     */
     public String invokeTextRequired(String systemPrompt, String userPrompt) {
         requireAvailable();
         int attempts = Math.max(1, properties.getLlmMaxRetries() + 1);
@@ -99,6 +143,12 @@ public class LlmClientService {
         throw lastError == null ? new IllegalStateException("LLM invocation failed") : lastError;
     }
 
+    /**
+     * 将底层 LLM 异常转换为可读错误说明。
+     *
+     * @param throwable 异常对象
+     * @return 错误描述
+     */
     public String formatLlmError(Throwable throwable) {
         String category = classifyLlmError(throwable);
         return switch (category) {
@@ -113,10 +163,22 @@ public class LlmClientService {
         };
     }
 
+    /**
+     * 根据异常类型推断 HTTP 状态码。
+     *
+     * @param throwable 异常对象
+     * @return 建议返回的状态码
+     */
     public int llmErrorHttpStatus(Throwable throwable) {
         return isRetryableLlmError(throwable) ? 503 : 500;
     }
 
+    /**
+     * 判断是否应跳过同供应商回退。
+     *
+     * @param throwable 异常对象
+     * @return 是否跳过同供应商重试
+     */
     public boolean shouldSkipSameProviderFallback(Throwable throwable) {
         String category = classifyLlmError(throwable);
         return "billing_service_unavailable".equals(category)
@@ -127,6 +189,11 @@ public class LlmClientService {
                 || "quota".equals(category);
     }
 
+    /**
+     * 延迟初始化并返回聊天模型。
+     *
+     * @return LangChain4j 聊天模型
+     */
     private ChatModel chatModel() {
         if (chatModel == null) {
             // Build the LangChain4j model lazily so rules mode can run without any LLM config.
@@ -141,6 +208,12 @@ public class LlmClientService {
         return chatModel;
     }
 
+    /**
+     * 识别 LLM 异常类别。
+     *
+     * @param throwable 异常对象
+     * @return 错误类别标识
+     */
     private String classifyLlmError(Throwable throwable) {
         String text = throwable == null ? "" : String.valueOf(throwable.getMessage()).toLowerCase();
         if (text.contains("billing_service_error") || text.contains("billing service temporarily unavailable")) {
@@ -170,6 +243,12 @@ public class LlmClientService {
         return "unknown";
     }
 
+    /**
+     * 判断异常是否属于可重试的 LLM 错误。
+     *
+     * @param throwable 异常对象
+     * @return 是否可重试
+     */
     private boolean isRetryableLlmError(Throwable throwable) {
         String category = classifyLlmError(throwable);
         return "billing_service_unavailable".equals(category)
@@ -180,6 +259,11 @@ public class LlmClientService {
                 || "rate_limit".equals(category);
     }
 
+    /**
+     * 按退避策略暂停后继续重试。
+     *
+     * @param attempt 当前重试次数
+     */
     private void sleepRetry(int attempt) {
         try {
             Thread.sleep((long) (properties.getLlmRetryBackoffSeconds() * attempt * 1000));

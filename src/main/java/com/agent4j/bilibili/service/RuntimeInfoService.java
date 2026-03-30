@@ -10,10 +10,21 @@ public class RuntimeInfoService {
 
     private final AppProperties properties;
 
+    /**
+     * 创建运行时信息服务。
+     *
+     * @param properties 系统配置
+     */
     public RuntimeInfoService(AppProperties properties) {
         this.properties = properties;
     }
 
+    /**
+     * 构建前端运行时状态信息。
+     * 包含运行模式、LLM 能力开关和界面提示文案。
+     *
+     * @return 供前端展示的运行时数据
+     */
     public Map<String, Object> buildRuntimePayload() {
         boolean llmEnabled = properties.llmEnabled();
         Map<String, Object> payload = new LinkedHashMap<>();

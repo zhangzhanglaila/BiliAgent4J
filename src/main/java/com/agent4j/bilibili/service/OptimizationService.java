@@ -17,12 +17,27 @@ public class OptimizationService {
     private final VideoMetricRepository repository;
     private final LlmClientService llmClientService;
 
+    /**
+     * 创建视频优化服务。
+     *
+     * @param videoResolverService 视频解析服务
+     * @param repository 视频指标仓库
+     * @param llmClientService LLM 客户端服务
+     */
     public OptimizationService(VideoResolverService videoResolverService, VideoMetricRepository repository, LlmClientService llmClientService) {
         this.videoResolverService = videoResolverService;
         this.repository = repository;
         this.llmClientService = llmClientService;
     }
 
+    /**
+     * 围绕目标视频生成优化建议。
+     * 输出诊断结论、标题优化、封面建议和内容方向。
+     *
+     * @param bvId 目标视频 BV 号
+     * @param benchmarkVideos 对标视频列表
+     * @return 视频优化建议
+     */
     public OptimizationSuggestion run(String bvId, List<VideoMetrics> benchmarkVideos) {
         VideoMetrics current = fetchVideoMetrics(bvId);
         List<Map<String, Object>> history = repository.getHistory(bvId, 5);
@@ -76,6 +91,12 @@ public class OptimizationService {
         return result;
     }
 
+    /**
+     * 获取或估算目标视频的当前指标。
+     *
+     * @param bvId 目标视频 BV 号
+     * @return 当前视频指标
+     */
     public VideoMetrics fetchVideoMetrics(String bvId) {
         try {
             Map<String, Object> info = videoResolverService.fetchVideoInfo("https://www.bilibili.com/video/" + bvId, bvId);
@@ -129,6 +150,13 @@ public class OptimizationService {
         }
     }
 
+    /**
+     * 根据当前视频和对标样本生成规则诊断。
+     *
+     * @param current 当前视频指标
+     * @param benchmarkVideos 对标视频列表
+     * @return 规则诊断结果
+     */
     private RuleDiagnosis ruleBasedDiagnosis(VideoMetrics current, List<VideoMetrics> benchmarkVideos) {
         double avgViews = benchmarkVideos.isEmpty() ? current.getView() : benchmarkVideos.stream().mapToDouble(VideoMetrics::getView).average().orElse(current.getView());
         double avgLikeRate = benchmarkVideos.isEmpty() ? current.getLikeRate() : benchmarkVideos.stream().mapToDouble(VideoMetrics::getLikeRate).average().orElse(current.getLikeRate());
@@ -154,6 +182,16 @@ public class OptimizationService {
         return new RuleDiagnosis(String.join("；", diagnosis), suggestions);
     }
 
+    /**
+     * 根据互动指标估算完播率。
+     *
+     * @param duration 视频时长
+     * @param view 播放量
+     * @param like 点赞量
+     * @param coin 投币量
+     * @param favorite 收藏量
+     * @return 估算后的完播率
+     */
     private double estimateCompletionRate(int duration, int view, int like, int coin, int favorite) {
         if (duration <= 0) {
             return 0.0;
@@ -162,6 +200,13 @@ public class OptimizationService {
         return Math.min(0.95, 0.22 + weighted * 10);
     }
 
+    /**
+     * 从 JSON 节点中读取字符串列表。
+     *
+     * @param node JSON 节点
+     * @param fallback 回退列表
+     * @return 去重后的字符串列表
+     */
     private List<String> readStringList(JsonNode node, List<String> fallback) {
         if (node == null || !node.isArray()) {
             return fallback;
@@ -176,6 +221,12 @@ public class OptimizationService {
         return result.isEmpty() ? fallback : result;
     }
 
+    /**
+     * 将对象安全转换为 Map。
+     *
+     * @param value 原始值
+     * @return 转换后的映射结果
+     */
     private Map<String, Object> map(Object value) {
         if (value instanceof Map<?, ?> source) {
             java.util.LinkedHashMap<String, Object> result = new java.util.LinkedHashMap<>();
@@ -185,6 +236,12 @@ public class OptimizationService {
         return new java.util.LinkedHashMap<>();
     }
 
+    /**
+     * 将对象安全转换为整数。
+     *
+     * @param value 原始值
+     * @return 转换后的整数结果
+     */
     private int intValue(Object value) {
         return com.agent4j.bilibili.util.TextUtils.safeInt(value);
     }

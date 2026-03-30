@@ -21,16 +21,30 @@ public class ApiController {
     private final WorkspaceService workspaceService;
     private final LlmClientService llmClientService;
 
+    /**
+     * 创建 API 控制器并注入依赖
+     * @param workspaceService 工作台服务
+     * @param llmClientService LLM 客户端服务
+     */
     public ApiController(WorkspaceService workspaceService, LlmClientService llmClientService) {
         this.workspaceService = workspaceService;
         this.llmClientService = llmClientService;
     }
 
+    /**
+     * 获取运行时信息接口
+     * @return 标准接口响应
+     */
     @GetMapping("/runtime-info")
     public ApiResponse<Map<String, Object>> runtimeInfo() {
         return ApiResponse.success(workspaceService.runtimeInfo());
     }
 
+    /**
+     * 接收视频链接解析请求
+     * @param body 请求体数据
+     * @return 标准接口响应
+     */
     @PostMapping("/resolve-bili-link")
     public ApiResponse<Map<String, Object>> resolveBiliLink(@RequestBody Map<String, Object> body) {
         String url = String.valueOf(body.getOrDefault("url", "")).trim();
@@ -40,11 +54,21 @@ public class ApiController {
         return ApiResponse.success(workspaceService.resolveBiliLink(url));
     }
 
+    /**
+     * 接收创作模块生成请求
+     * @param body 请求体数据
+     * @return 标准接口响应
+     */
     @PostMapping("/module-create")
     public ApiResponse<Map<String, Object>> moduleCreate(@RequestBody Map<String, Object> body) {
         return ApiResponse.success(workspaceService.moduleCreate(body));
     }
 
+    /**
+     * 接收视频分析模块请求
+     * @param body 请求体数据
+     * @return 标准接口响应
+     */
     @PostMapping("/module-analyze")
     public ApiResponse<Map<String, Object>> moduleAnalyze(@RequestBody Map<String, Object> body) {
         String url = String.valueOf(body.getOrDefault("url", "")).trim();
@@ -54,6 +78,11 @@ public class ApiController {
         return ApiResponse.success(workspaceService.moduleAnalyze(body));
     }
 
+    /**
+     * 接收智能助手对话请求
+     * @param body 请求体数据
+     * @return 标准接口响应
+     */
     @PostMapping("/chat")
     public ApiResponse<Map<String, Object>> chat(@RequestBody Map<String, Object> body) {
         String message = String.valueOf(body.getOrDefault("message", "")).trim();
@@ -63,6 +92,11 @@ public class ApiController {
         return ApiResponse.success(workspaceService.chat(body));
     }
 
+    /**
+     * 接收选题生成请求
+     * @param body 请求体数据
+     * @return 标准接口响应
+     */
     @PostMapping("/topic")
     public ApiResponse<Map<String, Object>> topic(@RequestBody Map<String, Object> body) {
         return ApiResponse.success(workspaceService.runTopic(
@@ -72,6 +106,11 @@ public class ApiController {
         ));
     }
 
+    /**
+     * 接收文案生成请求
+     * @param body 请求体数据
+     * @return 标准接口响应
+     */
     @PostMapping("/copy")
     public ApiResponse<Object> copy(@RequestBody Map<String, Object> body) {
         return ApiResponse.success(workspaceService.runCopy(
@@ -80,6 +119,11 @@ public class ApiController {
         ));
     }
 
+    /**
+     * 接收互动运营请求
+     * @param body 请求体数据
+     * @return 标准接口响应
+     */
     @PostMapping("/operate")
     public ApiResponse<Object> operate(@RequestBody Map<String, Object> body) {
         return ApiResponse.success(workspaceService.runOperate(
@@ -88,6 +132,11 @@ public class ApiController {
         ));
     }
 
+    /**
+     * 接收视频优化请求
+     * @param body 请求体数据
+     * @return 标准接口响应
+     */
     @PostMapping("/optimize")
     public ApiResponse<Object> optimize(@RequestBody Map<String, Object> body) {
         return ApiResponse.success(workspaceService.runOptimize(
@@ -95,6 +144,11 @@ public class ApiController {
         ));
     }
 
+    /**
+     * 接收整套流水线执行请求
+     * @param body 请求体数据
+     * @return 标准接口响应
+     */
     @PostMapping("/pipeline")
     public ApiResponse<Map<String, Object>> pipeline(@RequestBody Map<String, Object> body) {
         return ApiResponse.success(workspaceService.runPipeline(
@@ -106,6 +160,11 @@ public class ApiController {
         ));
     }
 
+    /**
+     * 统一处理控制器异常并包装错误响应
+     * @param exception 捕获到的异常
+     * @return 标准错误响应
+     */
     @org.springframework.web.bind.annotation.ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Map<String, Object>>> handle(Exception exception) {
         int status = llmClientService.llmErrorHttpStatus(exception);
@@ -117,6 +176,11 @@ public class ApiController {
                 .body(ApiResponse.failure(message));
     }
 
+    /**
+     * 读取请求中的整数 ID 列表
+     * @param raw 原始参数
+     * @return 过滤后的正整数列表
+     */
     private List<Integer> readIntegerList(Object raw) {
         if (!(raw instanceof List<?> list)) {
             return List.of();

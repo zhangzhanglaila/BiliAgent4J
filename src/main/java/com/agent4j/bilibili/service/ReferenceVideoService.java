@@ -25,10 +25,24 @@ public class ReferenceVideoService {
 
     private final BilibiliHttpSupport httpSupport;
 
+    /**
+     * 创建参考视频服务。
+     *
+     * @param httpSupport B 站请求支持组件
+     */
     public ReferenceVideoService(BilibiliHttpSupport httpSupport) {
         this.httpSupport = httpSupport;
     }
 
+    /**
+     * 从市场快照中筛选参考视频。
+     *
+     * @param marketSnapshot 市场样本快照
+     * @param excludeBvid 需要排除的 BV 号
+     * @param queryText 查询文本
+     * @param resolved 当前视频解析结果
+     * @return 参考视频列表
+     */
     public List<Map<String, Object>> buildReferenceVideosFromMarketSnapshot(
             Map<String, Object> marketSnapshot,
             String excludeBvid,
@@ -42,6 +56,15 @@ public class ReferenceVideoService {
         return selectReferenceVideos(sources, excludeBvid, 6, queryText, resolved);
     }
 
+    /**
+     * 从工具观察结果中提取参考视频。
+     *
+     * @param observations 工具观察列表
+     * @param excludeBvid 需要排除的 BV 号
+     * @param queryText 查询文本
+     * @param resolved 当前视频解析结果
+     * @return 参考视频列表
+     */
     public List<Map<String, Object>> extractReferenceLinksFromToolObservations(
             List<Map<String, Object>> observations,
             String excludeBvid,
@@ -64,6 +87,13 @@ public class ReferenceVideoService {
         return selectReferenceVideos(sources, excludeBvid, 6, String.join(" ", queryParts), resolved);
     }
 
+    /**
+     * 构建参考视频查询文本。
+     *
+     * @param resolved 当前视频解析结果
+     * @param extraText 额外补充文本
+     * @return 合并后的查询文本
+     */
     public String buildReferenceQueryText(Map<String, Object> resolved, String extraText) {
         List<String> parts = new ArrayList<>();
         if (resolved != null) {
@@ -80,6 +110,16 @@ public class ReferenceVideoService {
         return String.join(" ", parts);
     }
 
+    /**
+     * 从候选样本中筛选最值得参考的视频。
+     *
+     * @param sources 候选视频列表
+     * @param excludeBvid 需要排除的 BV 号
+     * @param limit 返回数量上限
+     * @param queryText 查询文本
+     * @param resolved 当前视频解析结果
+     * @return 排序后的参考视频列表
+     */
     public List<Map<String, Object>> selectReferenceVideos(
             List<Map<String, Object>> sources,
             String excludeBvid,
@@ -126,6 +166,14 @@ public class ReferenceVideoService {
         return result;
     }
 
+    /**
+     * 用搜索结果和相关推荐补充参考候选集。
+     *
+     * @param sources 原始候选列表
+     * @param queryText 查询文本
+     * @param resolved 当前视频解析结果
+     * @return 补充后的候选列表
+     */
     private List<Map<String, Object>> enrichReferenceSourcesWithSearch(
             List<Map<String, Object>> sources,
             String queryText,
@@ -148,6 +196,13 @@ public class ReferenceVideoService {
         return combined;
     }
 
+    /**
+     * 生成参考视频搜索关键词。
+     *
+     * @param queryText 查询文本
+     * @param resolved 当前视频解析结果
+     * @return 搜索词列表
+     */
     private List<String> buildReferenceSearchQueries(String queryText, Map<String, Object> resolved) {
         List<String> queries = new ArrayList<>();
         if (resolved != null) {
@@ -167,6 +222,12 @@ public class ReferenceVideoService {
         return queries.stream().map(String::trim).filter(value -> value.length() >= 2).distinct().limit(5).collect(Collectors.toList());
     }
 
+    /**
+     * 从文本中提取参考关键词。
+     *
+     * @param text 原始文本
+     * @return 关键词列表
+     */
     private List<String> extractReferenceTerms(String text) {
         String clean = normalizeReferenceText(text);
         List<String> result = new ArrayList<>();
@@ -177,6 +238,12 @@ public class ReferenceVideoService {
         return result.stream().limit(32).collect(Collectors.toList());
     }
 
+    /**
+     * 将合法关键词追加到结果列表。
+     *
+     * @param terms 关键词结果集
+     * @param term 当前候选词
+     */
     private void appendReferenceTerm(List<String> terms, String term) {
         String value = term == null ? "" : term.trim().toLowerCase(Locale.ROOT);
         if (value.length() < 2 || value.chars().allMatch(Character::isDigit) || STOPWORDS.contains(value) || terms.contains(value)) {
@@ -185,6 +252,12 @@ public class ReferenceVideoService {
         terms.add(value);
     }
 
+    /**
+     * 规范化参考文本，便于后续匹配。
+     *
+     * @param text 原始文本
+     * @return 规范化后的文本
+     */
     private String normalizeReferenceText(String text) {
         return (text == null ? "" : text)
                 .replaceAll("[【】\\[\\]（）()<>《》\"'`~!@#$%^&*_+=|\\\\/:;,.?？！，。、“”·-]+", " ")
@@ -193,6 +266,12 @@ public class ReferenceVideoService {
                 .toLowerCase(Locale.ROOT);
     }
 
+    /**
+     * 判断候选项是否为可用的真实参考视频。
+     *
+     * @param item 候选条目
+     * @return 是否满足参考条件
+     */
     private boolean isRealReferenceVideo(Map<String, Object> item) {
         String bvid = String.valueOf(item.getOrDefault("bvid", ""));
         String url = String.valueOf(item.getOrDefault("url", ""));
@@ -201,6 +280,14 @@ public class ReferenceVideoService {
                 && REAL_BVID.matcher(bvid).matches();
     }
 
+    /**
+     * 为参考视频候选项构建排序分数。
+     *
+     * @param item 候选条目
+     * @param queryText 查询文本
+     * @param resolved 当前视频解析结果
+     * @return 排序依据
+     */
     private Rank buildRank(Map<String, Object> item, String queryText, Map<String, Object> resolved) {
         String normalizedTitle = normalizeReferenceText(String.valueOf(item.getOrDefault("title", "")));
         List<String> titleTerms = extractReferenceTerms(String.valueOf(item.getOrDefault("title", "")));
@@ -238,6 +325,13 @@ public class ReferenceVideoService {
         );
     }
 
+    /**
+     * 获取当前视频的相关推荐。
+     *
+     * @param bvid 当前视频 BV 号
+     * @param limit 返回数量上限
+     * @return 相关推荐列表
+     */
     private List<Map<String, Object>> fetchDirectRelatedReferenceVideos(String bvid, int limit) {
         if (!REAL_BVID.matcher(bvid == null ? "" : bvid).matches()) {
             return List.of();
@@ -279,6 +373,13 @@ public class ReferenceVideoService {
         return result;
     }
 
+    /**
+     * 根据关键词搜索参考视频。
+     *
+     * @param query 搜索词
+     * @param limit 返回数量上限
+     * @return 搜索结果列表
+     */
     private List<Map<String, Object>> fetchSearchReferenceVideos(String query, int limit) {
         JsonNode payload = httpSupport.fetchJson(
                 "https://api.bilibili.com/x/web-interface/search/type?search_type=video&order=click&page=1&page_size="
@@ -320,6 +421,12 @@ public class ReferenceVideoService {
         return result;
     }
 
+    /**
+     * 从工具观察结果中提取参考查询文本。
+     *
+     * @param observation 单步观察结果
+     * @return 查询文本
+     */
     private String extractReferenceQueryFromObservation(Map<String, Object> observation) {
         Map<String, Object> video = map(observation.get("video"));
         if (!video.isEmpty()) {
@@ -341,6 +448,12 @@ public class ReferenceVideoService {
         return "";
     }
 
+    /**
+     * 将原始对象读取为条目列表。
+     *
+     * @param raw 原始值
+     * @return 条目列表
+     */
     private List<Map<String, Object>> readItems(Object raw) {
         if (!(raw instanceof List<?> list)) {
             return List.of();
@@ -352,6 +465,12 @@ public class ReferenceVideoService {
         return result;
     }
 
+    /**
+     * 将对象安全转换为 Map。
+     *
+     * @param value 原始值
+     * @return 映射结果
+     */
     private Map<String, Object> map(Object value) {
         if (value instanceof Map<?, ?> source) {
             Map<String, Object> result = new LinkedHashMap<>();
@@ -362,6 +481,12 @@ public class ReferenceVideoService {
     }
 
     private record RankedReference(Map<String, Object> item, Rank rank) implements Comparable<RankedReference> {
+        /**
+         * 按排序分数比较参考候选项。
+         *
+         * @param other 另一条候选记录
+         * @return 比较结果
+         */
         @Override
         public int compareTo(RankedReference other) {
             return rank.compareTo(other.rank);
@@ -380,6 +505,12 @@ public class ReferenceVideoService {
             double competitionScore,
             String title
     ) implements Comparable<Rank> {
+        /**
+         * 比较两个排序分数对象。
+         *
+         * @param other 另一组排序分数
+         * @return 比较结果
+         */
         @Override
         public int compareTo(Rank other) {
             return Comparator.comparingInt(Rank::related)

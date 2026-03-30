@@ -18,11 +18,23 @@ public class TopicService {
     private final TopicDataService topicDataService;
     private final AppProperties properties;
 
+    /**
+     * 创建选题服务并注入依赖
+     * @param topicDataService 选题数据服务
+     * @param properties 应用配置
+     */
     public TopicService(TopicDataService topicDataService, AppProperties properties) {
         this.topicDataService = topicDataService;
         this.properties = properties;
     }
 
+    /**
+     * 汇总热榜、分区和对标样本生成选题结果
+     * @param partitionName 目标分区名称
+     * @param upIds 对标 UP 主 ID 列表
+     * @param seedTopic 种子选题
+     * @return 选题结果
+     */
     public TopicResult run(String partitionName, List<Integer> upIds, String seedTopic) {
         List<VideoMetrics> hotVideos = topicDataService.fetchHotVideos();
         List<VideoMetrics> partitionVideos = topicDataService.fetchPartitionVideos(partitionName);
@@ -39,6 +51,11 @@ public class TopicService {
         return new TopicResult(ideas, allVideos.size(), allVideos, seedTopic == null ? "" : seedTopic);
     }
 
+    /**
+     * 从高分视频样本中提炼趋势选题
+     * @param videos 视频样本列表
+     * @return 趋势型选题列表
+     */
     private List<TopicIdea> generateTrendingTopics(List<VideoMetrics> videos) {
         topicDataService.fillCompetitionScores(videos);
         return videos.stream()
@@ -70,6 +87,14 @@ public class TopicService {
                 .collect(Collectors.collectingAndThen(Collectors.toList(), this::dedupeTopIdeas));
     }
 
+    /**
+     * 围绕种子选题生成优先候选方向
+     * @param seedTopic 种子选题
+     * @param videos 视频样本列表
+     * @param partitionName 目标分区名称
+     * @param upIds 对标 UP 主 ID 列表
+     * @return 种子选题候选列表
+     */
     private List<TopicIdea> generateSeedTopics(String seedTopic, List<VideoMetrics> videos, String partitionName, List<Integer> upIds) {
         if (seedTopic == null || seedTopic.isBlank()) {
             return List.of();
@@ -108,6 +133,13 @@ public class TopicService {
         return ideas;
     }
 
+    /**
+     * 合并优先选题和兜底选题
+     * @param preferred 优先选题列表
+     * @param fallback 兜底选题列表
+     * @param limit 保留数量上限
+     * @return 合并后的选题列表
+     */
     private List<TopicIdea> mergeIdeas(List<TopicIdea> preferred, List<TopicIdea> fallback, int limit) {
         List<TopicIdea> result = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
@@ -132,6 +164,11 @@ public class TopicService {
         return result;
     }
 
+    /**
+     * 按主题去重并保留靠前创意
+     * @param ideas 创意列表
+     * @return 去重后的创意列表
+     */
     private List<TopicIdea> dedupeTopIdeas(List<TopicIdea> ideas) {
         List<TopicIdea> result = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
@@ -147,6 +184,11 @@ public class TopicService {
         return result;
     }
 
+    /**
+     * 清理种子选题中的噪音文本
+     * @param seedTopic 种子选题
+     * @return 清理后的选题文本
+     */
     private String cleanSeedTopic(String seedTopic) {
         return seedTopic
                 .replaceAll("[【\\[].*?[】\\]]", "")
@@ -155,6 +197,12 @@ public class TopicService {
                 .trim();
     }
 
+    /**
+     * 根据关键词匹配相关视频样本
+     * @param seedTopic 种子选题
+     * @param videos 视频样本列表
+     * @return 相关视频列表
+     */
     private List<VideoMetrics> findRelatedVideos(String seedTopic, List<VideoMetrics> videos) {
         List<String> keywords = topicDataService.extractKeywords(seedTopic);
         if (keywords.isEmpty()) {
@@ -166,6 +214,15 @@ public class TopicService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 为种子选题候选生成理由说明
+     * @param seedTopic 种子选题
+     * @param variant 扩展方向
+     * @param relatedVideos 相关视频样本
+     * @param partitionName 目标分区名称
+     * @param upIds 对标 UP 主 ID 列表
+     * @return 选题理由文本
+     */
     private String buildSeedReason(String seedTopic, String variant, List<VideoMetrics> relatedVideos, String partitionName, List<Integer> upIds) {
         if (!relatedVideos.isEmpty()) {
             double avgViews = relatedVideos.stream().mapToDouble(VideoMetrics::getView).average().orElse(0);
@@ -200,6 +257,11 @@ public class TopicService {
                 + " 个同类 UP 样本做延展，避免直接跟全站热榜撞题。";
     }
 
+    /**
+     * 按选题模式扩展候选方向
+     * @param cleaned 清理后的种子选题
+     * @return 候选方向与选题文本列表
+     */
     private List<String[]> buildSeedCandidates(String cleaned) {
         String mode = seedTopicMode(cleaned);
         String subject = seedTopicSubject(cleaned);
@@ -240,6 +302,11 @@ public class TopicService {
         );
     }
 
+    /**
+     * 识别种子选题的表达模式
+     * @param cleaned 清理后的种子选题
+     * @return 选题模式标识
+     */
     private String seedTopicMode(String cleaned) {
         if (cleaned.contains("第1条") || cleaned.contains("第2条") || cleaned.contains("第3条") || cleaned.contains("做系列内容")) {
             return "series_plan";
@@ -256,6 +323,11 @@ public class TopicService {
         return "general";
     }
 
+    /**
+     * 从种子选题中提取核心主体
+     * @param cleaned 清理后的种子选题
+     * @return 主题主体文本
+     */
     private String seedTopicSubject(String cleaned) {
         List<String> markers = List.of(
                 "第一条视频",

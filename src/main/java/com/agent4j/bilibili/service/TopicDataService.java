@@ -18,11 +18,22 @@ public class TopicDataService {
     private final AppProperties properties;
     private final BilibiliHttpSupport httpSupport;
 
+    /**
+     * 创建选题数据服务。
+     *
+     * @param properties 系统配置
+     * @param httpSupport B 站请求支持组件
+     */
     public TopicDataService(AppProperties properties, BilibiliHttpSupport httpSupport) {
         this.properties = properties;
         this.httpSupport = httpSupport;
     }
 
+    /**
+     * 抓取 B 站全站热门视频样本。
+     *
+     * @return 热门视频指标列表
+     */
     public List<VideoMetrics> fetchHotVideos() {
         JsonNode payload = httpSupport.fetchJson("https://api.bilibili.com/x/web-interface/popular?pn=1&ps=20");
         List<VideoMetrics> result = new ArrayList<>();
@@ -35,6 +46,12 @@ public class TopicDataService {
         return result;
     }
 
+    /**
+     * 抓取指定分区的榜单视频样本。
+     *
+     * @param partitionName 分区名称
+     * @return 分区视频指标列表
+     */
     public List<VideoMetrics> fetchPartitionVideos(String partitionName) {
         String normalized = properties.normalizePartition(partitionName);
         int tid = properties.partitionTid(normalized);
@@ -49,6 +66,12 @@ public class TopicDataService {
         return result;
     }
 
+    /**
+     * 抓取对标 UP 主的近期视频样本。
+     *
+     * @param upIds 对标 UP 主 ID 列表
+     * @return 对标视频指标列表
+     */
     public List<VideoMetrics> fetchPeerUpVideos(List<Integer> upIds) {
         List<Integer> targets = (upIds == null || upIds.isEmpty()) ? properties.defaultPeerUpIds() : upIds;
         List<VideoMetrics> result = new ArrayList<>();
@@ -75,10 +98,22 @@ public class TopicDataService {
         return result;
     }
 
+    /**
+     * 将视频指标列表转换为可序列化结构。
+     *
+     * @param videos 视频指标列表
+     * @return 序列化后的结果列表
+     */
     public List<Map<String, Object>> serializeVideos(List<VideoMetrics> videos) {
         return videos.stream().map(this::serializeVideoMetric).collect(Collectors.toList());
     }
 
+    /**
+     * 将单个视频指标转换为前端结构。
+     *
+     * @param videoMetric 视频指标对象
+     * @return 序列化后的指标数据
+     */
     public Map<String, Object> serializeVideoMetric(VideoMetrics videoMetric) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("bvid", videoMetric.getBvid());
@@ -103,6 +138,16 @@ public class TopicDataService {
         return payload;
     }
 
+    /**
+     * 根据互动表现估算平均观看时长。
+     *
+     * @param duration 视频时长
+     * @param view 播放量
+     * @param like 点赞量
+     * @param favorite 收藏量
+     * @param reply 评论量
+     * @return 估算后的平均观看秒数
+     */
     public double estimateAverageViewDuration(int duration, int view, int like, int favorite, int reply) {
         if (duration <= 0) {
             return 0.0;
@@ -112,6 +157,12 @@ public class TopicDataService {
         return duration * estimatedRatio;
     }
 
+    /**
+     * 解析时长文本为秒数。
+     *
+     * @param raw 原始时长文本
+     * @return 时长秒数
+     */
     public int parseDuration(String raw) {
         if (raw == null || raw.isBlank()) {
             return 0;
@@ -126,6 +177,12 @@ public class TopicDataService {
         return TextUtils.safeInt(parts[0]) * 3600 + TextUtils.safeInt(parts[1]) * 60 + TextUtils.safeInt(parts[2]);
     }
 
+    /**
+     * 从标题中提取关键词。
+     *
+     * @param title 视频标题
+     * @return 关键词列表
+     */
     public List<String> extractKeywords(String title) {
         return TextUtils.extractKeywords(
                 title == null ? "" : title.replaceAll("[^\\w\\u4e00-\\u9fff]", " "),
@@ -133,6 +190,12 @@ public class TopicDataService {
         );
     }
 
+    /**
+     * 根据标题关键词判断视频类型。
+     *
+     * @param title 视频标题
+     * @return 推断出的视频类型
+     */
     public String pickVideoType(String title) {
         Map<String, String> mapping = Map.ofEntries(
                 Map.entry("教程", "教学"),
@@ -154,6 +217,12 @@ public class TopicDataService {
         return "干货";
     }
 
+    /**
+     * 根据流量和互动指标计算视频分数。
+     *
+     * @param video 视频指标
+     * @return 综合评分
+     */
     public double scoreVideo(VideoMetrics video) {
         double traffic = Math.log10(Math.max(video.getView(), 1));
         double interaction = video.getLikeRate() * 100 + video.getCompletionRate() * 10;
@@ -161,6 +230,11 @@ public class TopicDataService {
         return traffic + interaction + competitionPenalty;
     }
 
+    /**
+     * 按关键词桶为视频补充竞争分数。
+     *
+     * @param videos 视频指标列表
+     */
     public void fillCompetitionScores(List<VideoMetrics> videos) {
         Map<String, List<VideoMetrics>> buckets = new LinkedHashMap<>();
         for (VideoMetrics video : videos) {
@@ -177,6 +251,13 @@ public class TopicDataService {
         }
     }
 
+    /**
+     * 根据接口条目构建视频指标对象。
+     *
+     * @param item 接口返回条目
+     * @param source 数据来源标识
+     * @return 视频指标对象
+     */
     private VideoMetrics buildMetrics(JsonNode item, String source) {
         JsonNode stat = item.path("stat");
         JsonNode owner = item.path("owner");
@@ -214,6 +295,13 @@ public class TopicDataService {
         return metrics;
     }
 
+    /**
+     * 根据对标 UP 视频条目构建指标对象。
+     *
+     * @param item 接口返回条目
+     * @param upId 对标 UP 主 ID
+     * @return 视频指标对象
+     */
     private VideoMetrics buildPeerMetric(JsonNode item, int upId) {
         VideoMetrics metrics = new VideoMetrics();
         metrics.setBvid(item.path("bvid").asText(""));
@@ -247,6 +335,9 @@ public class TopicDataService {
         return metrics;
     }
 
+    /**
+     * 按配置暂停一段时间，避免请求过快。
+     */
     private void sleepInterval() {
         try {
             Thread.sleep((long) (properties.getRequestInterval() * 1000));

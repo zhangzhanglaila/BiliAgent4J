@@ -17,10 +17,20 @@ public class CliCommandRunner implements ApplicationRunner {
 
     private final WorkspaceService workspaceService;
 
+    /**
+     * 创建命令行运行器。
+     *
+     * @param workspaceService 工作台服务
+     */
     public CliCommandRunner(WorkspaceService workspaceService) {
         this.workspaceService = workspaceService;
     }
 
+    /**
+     * 读取命令行参数并分发到对应子命令。
+     *
+     * @param args 启动参数
+     */
     @Override
     public void run(ApplicationArguments args) {
         List<String> commands = args.getNonOptionArgs();
@@ -43,6 +53,11 @@ public class CliCommandRunner implements ApplicationRunner {
         System.exit(0);
     }
 
+    /**
+     * 执行命令行选题流程并输出结果。
+     *
+     * @param args 启动参数
+     */
     private void runTopic(ApplicationArguments args) {
         Map<String, Object> result = workspaceService.runTopic(
                 option(args, "partition", "knowledge"),
@@ -58,6 +73,11 @@ public class CliCommandRunner implements ApplicationRunner {
         }
     }
 
+    /**
+     * 执行命令行文案生成流程并输出结果。
+     *
+     * @param args 启动参数
+     */
     private void runCopy(ApplicationArguments args) {
         CopywritingResult result = workspaceService.runCopy(
                 option(args, "topic", "B站内容提纲"),
@@ -71,6 +91,11 @@ public class CliCommandRunner implements ApplicationRunner {
         System.out.println("置顶评论：" + result.getPinnedComment());
     }
 
+    /**
+     * 执行命令行互动运营流程。
+     *
+     * @param args 启动参数
+     */
     private void runOperate(ApplicationArguments args) {
         OperationResult result = workspaceService.runOperate(
                 option(args, "bv", "BV1Demo411111"),
@@ -80,6 +105,11 @@ public class CliCommandRunner implements ApplicationRunner {
         System.out.println(result.getSummary());
     }
 
+    /**
+     * 执行命令行优化流程并输出建议。
+     *
+     * @param args 启动参数
+     */
     private void runOptimize(ApplicationArguments args) {
         OptimizationSuggestion result = workspaceService.runOptimize(option(args, "bv", "BV1Demo411111"));
         System.out.println("\n=== 优化结果 ===");
@@ -89,6 +119,11 @@ public class CliCommandRunner implements ApplicationRunner {
         result.getContentSuggestions().forEach(item -> System.out.println("- " + item));
     }
 
+    /**
+     * 执行命令行端到端流水线流程。
+     *
+     * @param args 启动参数
+     */
     private void runPipeline(ApplicationArguments args) {
         Map<String, Object> result = workspaceService.runPipeline(
                 option(args, "bv", "BV1Demo411111"),
@@ -101,6 +136,14 @@ public class CliCommandRunner implements ApplicationRunner {
         System.out.println(result);
     }
 
+    /**
+     * 读取命令行选项值，不存在时返回默认值。
+     *
+     * @param args 启动参数
+     * @param name 选项名称
+     * @param fallback 默认值
+     * @return 解析后的参数值
+     */
     private String option(ApplicationArguments args, String name, String fallback) {
         List<String> values = args.getOptionValues(name);
         if (values == null || values.isEmpty()) {
@@ -110,6 +153,12 @@ public class CliCommandRunner implements ApplicationRunner {
         return value == null || value.isBlank() ? fallback : value;
     }
 
+    /**
+     * 将原始对象安全转换为选题列表。
+     *
+     * @param raw 原始结果对象
+     * @return 选题列表
+     */
     @SuppressWarnings("unchecked")
     private List<TopicIdea> readIdeas(Object raw) {
         if (raw instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof TopicIdea) {

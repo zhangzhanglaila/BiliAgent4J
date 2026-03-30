@@ -31,10 +31,21 @@ public class CopywritingService {
 
     private final LlmClientService llmClientService;
 
+    /**
+     * 创建文案服务并注入模型依赖
+     * @param llmClientService LLM 客户端服务
+     */
     public CopywritingService(LlmClientService llmClientService) {
         this.llmClientService = llmClientService;
     }
 
+    /**
+     * 根据主题、创意和风格生成完整文案
+     * @param topic 目标主题
+     * @param topicIdea 选题创意
+     * @param style 文案风格
+     * @return 标题、脚本、简介和标签结果
+     */
     public CopywritingResult run(String topic, TopicIdea topicIdea, String style) {
         String finalTopic = cleanText(topic == null || topic.isBlank()
                 ? topicIdea == null ? "B站高效运营" : topicIdea.getTopic()
@@ -74,10 +85,21 @@ public class CopywritingService {
         return result;
     }
 
+    /**
+     * 清理文案中的空白和异常字符
+     * @param text 原始文本
+     * @return 清理后的文本
+     */
     public String cleanText(String text) {
         return TextUtils.cleanCopyText(text == null ? "" : text);
     }
 
+    /**
+     * 在模型不可用时按规则生成文案
+     * @param topic 目标主题
+     * @param style 文案风格
+     * @return 回退文案结果
+     */
     public CopywritingResult fallback(String topic, String style) {
         CopywritingResult result = new CopywritingResult();
         result.setTopic(topic);
@@ -91,6 +113,12 @@ public class CopywritingService {
         return result;
     }
 
+    /**
+     * 按主题模式和风格生成标题候选
+     * @param topic 目标主题
+     * @param style 文案风格
+     * @return 标题列表
+     */
     private List<String> buildTitles(String topic, String style) {
         String mode = topicMode(topic);
         String subject = extractSubject(topic);
@@ -152,6 +180,12 @@ public class CopywritingService {
         );
     }
 
+    /**
+     * 按主题模式和风格生成分段脚本
+     * @param topic 目标主题
+     * @param style 文案风格
+     * @return 脚本分段列表
+     */
     private List<Map<String, String>> buildScript(String topic, String style) {
         String mode = topicMode(topic);
         String subject = extractSubject(topic);
@@ -199,6 +233,12 @@ public class CopywritingService {
         );
     }
 
+    /**
+     * 生成视频简介文案
+     * @param topic 目标主题
+     * @param style 文案风格
+     * @return 视频简介
+     */
     private String buildDescription(String topic, String style) {
         String mode = topicMode(topic);
         String subject = contentSubject(extractSubject(topic));
@@ -214,6 +254,12 @@ public class CopywritingService {
                 + " 文案风格是“" + style + "”，可直接按段落改成自己的版本。";
     }
 
+    /**
+     * 提取主题关键词并生成标签列表
+     * @param topic 目标主题
+     * @param style 文案风格
+     * @return 标签列表
+     */
     private List<String> buildTags(String topic, String style) {
         String mode = topicMode(topic);
         String subject = contentSubject(extractSubject(topic));
@@ -243,6 +289,11 @@ public class CopywritingService {
         return tags;
     }
 
+    /**
+     * 生成引导互动的置顶评论
+     * @param topic 目标主题
+     * @return 置顶评论文案
+     */
     private String buildPinnedComment(String topic) {
         String mode = topicMode(topic);
         String subject = contentSubject(extractSubject(topic));
@@ -258,6 +309,12 @@ public class CopywritingService {
         return "如果你也在做 " + subject + "，评论区告诉我你最想先优化哪一步，我继续按这个方向出下一条。";
     }
 
+    /**
+     * 从模型结果中提取标题并回退默认值
+     * @param data 模型返回数据
+     * @param fallback 回退文案结果
+     * @return 标题列表
+     */
     private List<String> pickTitles(JsonNode data, CopywritingResult fallback) {
         if (!JsonUtils.has(data, "titles") || !data.get("titles").isArray()) {
             return fallback.getTitles();
@@ -275,6 +332,12 @@ public class CopywritingService {
         return titles.isEmpty() ? fallback.getTitles() : titles;
     }
 
+    /**
+     * 从模型结果中提取脚本并回退默认值
+     * @param data 模型返回数据
+     * @param fallback 回退文案结果
+     * @return 脚本分段列表
+     */
     private List<Map<String, String>> pickScript(JsonNode data, CopywritingResult fallback) {
         if (!JsonUtils.has(data, "script") || !data.get("script").isArray()) {
             return fallback.getScript();
@@ -297,6 +360,12 @@ public class CopywritingService {
         return script.size() < 4 ? fallback.getScript() : script;
     }
 
+    /**
+     * 从模型结果中提取标签并回退默认值
+     * @param data 模型返回数据
+     * @param fallback 回退文案结果
+     * @return 标签列表
+     */
     private List<String> pickTags(JsonNode data, CopywritingResult fallback) {
         if (!JsonUtils.has(data, "tags") || !data.get("tags").isArray()) {
             return fallback.getTags();
@@ -314,6 +383,11 @@ public class CopywritingService {
         return result.isEmpty() ? fallback.getTags() : result;
     }
 
+    /**
+     * 识别选题所属的表达模式
+     * @param topic 目标主题
+     * @return 主题模式标识
+     */
     private String topicMode(String topic) {
         String cleaned = cleanText(topic);
         if (cleaned.contains("第1条") || cleaned.contains("第2条") || cleaned.contains("第3条") || cleaned.contains("做系列内容")) {
@@ -331,6 +405,11 @@ public class CopywritingService {
         return "general";
     }
 
+    /**
+     * 从选题文案中提取核心主体
+     * @param topic 目标主题
+     * @return 主体文本
+     */
     private String extractSubject(String topic) {
         String cleaned = cleanText(topic);
         if (cleaned.isBlank()) {
@@ -360,6 +439,11 @@ public class CopywritingService {
         return cleaned;
     }
 
+    /**
+     * 将主体整理为账号描述
+     * @param subject 核心主体
+     * @return 账号主体描述
+     */
     private String accountSubject(String subject) {
         String cleaned = cleanText(subject);
         if (cleaned.isBlank() || "这类内容".equals(cleaned)) {
@@ -368,6 +452,11 @@ public class CopywritingService {
         return cleaned.endsWith("账号") ? cleaned : cleaned + "账号";
     }
 
+    /**
+     * 将主体整理为内容描述
+     * @param subject 核心主体
+     * @return 内容主体描述
+     */
     private String contentSubject(String subject) {
         String cleaned = cleanText(subject);
         if (cleaned.isBlank()) {

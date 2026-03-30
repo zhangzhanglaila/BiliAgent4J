@@ -17,10 +17,19 @@ public class VideoResolverService {
 
     private final BilibiliHttpSupport httpSupport;
 
+    /**
+     * 创建视频解析服务并注入网络支持
+     * @param httpSupport B 站网络请求支持
+     */
     public VideoResolverService(BilibiliHttpSupport httpSupport) {
         this.httpSupport = httpSupport;
     }
 
+    /**
+     * 从视频链接中提取 BV 号
+     * @param url 原始视频链接
+     * @return 规范化后的 BV 号
+     */
     public String extractBvid(String url) {
         String raw = url == null ? "" : url.trim();
         String candidate = httpSupport.resolveShortLink(raw);
@@ -35,12 +44,23 @@ public class VideoResolverService {
         throw new IllegalArgumentException("未识别到有效的 B 站视频 BV 号");
     }
 
+    /**
+     * 解析视频链接并构建标准化载荷
+     * @param url 原始视频链接
+     * @return 工作台使用的视频结构化数据
+     */
     public Map<String, Object> resolveVideoPayload(String url) {
         String bvid = extractBvid(url);
         Map<String, Object> info = fetchVideoInfo(url, bvid);
         return buildResolvedPayload(info, bvid);
     }
 
+    /**
+     * 拉取目标视频的原始信息
+     * @param url 原始视频链接
+     * @param bvid 视频 BV 号
+     * @return 原始视频信息
+     */
     public Map<String, Object> fetchVideoInfo(String url, String bvid) {
         List<String> errors = new ArrayList<>();
         try {
@@ -56,6 +76,12 @@ public class VideoResolverService {
         throw new IllegalArgumentException(String.join("；", errors));
     }
 
+    /**
+     * 将原始视频信息整理为工作台结构
+     * @param info 原始视频信息
+     * @param bvid 视频 BV 号
+     * @return 标准化视频载荷
+     */
     public Map<String, Object> buildResolvedPayload(Map<String, Object> info, String bvid) {
         Map<String, Object> owner = map(info.get("owner"));
         int mid = TextUtils.safeInt(owner.get("mid"));
@@ -91,6 +117,12 @@ public class VideoResolverService {
         return result;
     }
 
+    /**
+     * 判断已解析载荷是否还能复用
+     * @param payload 已解析载荷
+     * @param url 当前视频链接
+     * @return 是否可直接复用
+     */
     public boolean isResolvedPayloadUsable(Object payload, String url) {
         if (!(payload instanceof Map<?, ?> raw)) {
             return false;
@@ -111,6 +143,11 @@ public class VideoResolverService {
         }
     }
 
+    /**
+     * 将分区编码转换为中文标签
+     * @param partition 分区编码
+     * @return 分区中文名称
+     */
     public String partitionLabel(String partition) {
         return switch (partition) {
             case "knowledge" -> "知识";
@@ -122,6 +159,12 @@ public class VideoResolverService {
         };
     }
 
+    /**
+     * 根据分区名称和 tid 映射系统分区
+     * @param tname B 站原始分区名
+     * @param tid B 站原始分区 ID
+     * @return 工作台分区编码
+     */
     public String mapPartition(String tname, int tid) {
         String text = tname == null ? "" : tname.toLowerCase();
         if (text.contains("知识") || text.contains("科普") || text.contains("学习") || text.contains("职业")) {
@@ -157,6 +200,13 @@ public class VideoResolverService {
         return "knowledge";
     }
 
+    /**
+     * 根据标题和分区推断内容风格
+     * @param title 视频标题
+     * @param partition 工作台分区编码
+     * @param tname B 站原始分区名
+     * @return 推断出的风格名称
+     */
     public String guessStyle(String title, String partition, String tname) {
         String text = ((title == null ? "" : title) + " " + (tname == null ? "" : tname)).toLowerCase();
         if (text.contains("教程") || text.contains("教学") || text.contains("入门") || text.contains("攻略") || text.contains("如何") || text.contains("怎么")) {
@@ -174,6 +224,11 @@ public class VideoResolverService {
         return "干货";
     }
 
+    /**
+     * 根据标题生成可用选题文本
+     * @param title 视频标题
+     * @return 清理后的选题文本
+     */
     public String buildTopic(String title) {
         String value = title == null ? "" : title;
         value = value.replaceAll("[【\\[].*?[】\\]]", "");
@@ -182,6 +237,11 @@ public class VideoResolverService {
         return value.isBlank() ? "B站内容选题拆解" : value;
     }
 
+    /**
+     * 提取播放、点赞和收藏等统计信息
+     * @param info 原始视频信息
+     * @return 统计字段结果
+     */
     public Map<String, Object> extractVideoStats(Map<String, Object> info) {
         Map<String, Object> stat = map(info.get("stat"));
         int view = TextUtils.safeInt(stat.get("view"));
@@ -207,6 +267,11 @@ public class VideoResolverService {
         return result;
     }
 
+    /**
+     * 通过公开接口获取视频信息
+     * @param bvid 视频 BV 号
+     * @return 原始视频信息
+     */
     private Map<String, Object> fetchVideoInfoViaPublicApi(String bvid) {
         JsonNode payload = httpSupport.fetchJson("https://api.bilibili.com/x/web-interface/view?bvid=" + httpSupport.encode(bvid));
         if (payload.path("code").asInt(0) != 0) {
@@ -219,6 +284,12 @@ public class VideoResolverService {
         return httpSupport.mapOf(data);
     }
 
+    /**
+     * 通过页面 HTML 回退获取视频信息
+     * @param url 原始视频链接
+     * @param bvid 视频 BV 号
+     * @return 原始视频信息
+     */
     private Map<String, Object> fetchVideoInfoViaHtml(String url, String bvid) {
         List<String> candidates = List.of(url == null ? "" : url.trim(), "https://www.bilibili.com/video/" + bvid);
         List<String> errors = new ArrayList<>();
@@ -236,6 +307,12 @@ public class VideoResolverService {
         throw new IllegalArgumentException("网页源码解析失败: " + String.join("；", errors));
     }
 
+    /**
+     * 从 HTML 中提取并规范化视频信息
+     * @param html 页面 HTML 内容
+     * @param bvid 视频 BV 号
+     * @return 规范化后的原始视频信息
+     */
     private Map<String, Object> normalizeHtmlInfo(String html, String bvid) {
         Document document = Jsoup.parse(html);
         JsonNode state = httpSupport.extractInitialState(html);
@@ -271,6 +348,11 @@ public class VideoResolverService {
         return result;
     }
 
+    /**
+     * 将任意映射对象转换为字符串键 Map
+     * @param value 原始映射对象
+     * @return 转换后的 Map 结果
+     */
     private Map<String, Object> map(Object value) {
         if (value instanceof Map<?, ?> source) {
             Map<String, Object> result = new LinkedHashMap<>();
@@ -280,6 +362,12 @@ public class VideoResolverService {
         return new LinkedHashMap<>();
     }
 
+    /**
+     * 读取映射中的字符串字段
+     * @param map 数据映射
+     * @param key 字段名
+     * @return 字符串结果
+     */
     private String text(Map<String, Object> map, String key) {
         Object value = map.get(key);
         return value == null ? "" : String.valueOf(value);

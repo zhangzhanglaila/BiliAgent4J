@@ -8,9 +8,16 @@ import java.util.List;
 
 public final class DotenvLoader {
 
+    /**
+     * 工具类，禁止实例化。
+     */
     private DotenvLoader() {
     }
 
+    /**
+     * 按候选路径加载 .env 配置。
+     * 仅在系统属性和环境变量都未设置时写入对应键值。
+     */
     public static void load() {
         for (Path path : candidatePaths()) {
             if (!Files.exists(path)) {
@@ -39,6 +46,11 @@ public final class DotenvLoader {
         }
     }
 
+    /**
+     * 返回按顺序尝试加载的 .env 路径。
+     *
+     * @return 可用的配置文件候选列表
+     */
     private static List<Path> candidatePaths() {
         return List.of(
                 Path.of(".env"),

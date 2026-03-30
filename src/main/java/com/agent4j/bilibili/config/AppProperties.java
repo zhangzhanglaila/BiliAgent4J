@@ -51,110 +51,245 @@ public class AppProperties {
     private String defaultPartition = "knowledge";
     private String defaultPeerUps = "546195,15263701,777536";
 
+    /**
+     * 获取请求间隔时间。
+     *
+     * @return 请求间隔秒数
+     */
     public double getRequestInterval() {
         return requestInterval;
     }
 
+    /**
+     * 设置请求间隔时间。
+     *
+     * @param requestInterval 请求间隔秒数
+     */
     public void setRequestInterval(double requestInterval) {
         this.requestInterval = requestInterval;
     }
 
+    /**
+     * 获取数据库文件路径。
+     *
+     * @return 数据库路径
+     */
     public String getDbPath() {
         return dbPath;
     }
 
+    /**
+     * 设置数据库文件路径。
+     *
+     * @param dbPath 数据库路径
+     */
     public void setDbPath(String dbPath) {
         this.dbPath = dbPath;
     }
 
+    /**
+     * 获取 LLM 服务提供方。
+     *
+     * @return 提供方名称
+     */
     public String getLlmProvider() {
         return llmProvider;
     }
 
+    /**
+     * 设置 LLM 服务提供方。
+     *
+     * @param llmProvider 提供方名称
+     */
     public void setLlmProvider(String llmProvider) {
         this.llmProvider = llmProvider;
     }
 
+    /**
+     * 获取 LLM API Key。
+     *
+     * @return 接口密钥
+     */
     public String getLlmApiKey() {
         return llmApiKey;
     }
 
+    /**
+     * 设置 LLM API Key。
+     *
+     * @param llmApiKey 接口密钥
+     */
     public void setLlmApiKey(String llmApiKey) {
         this.llmApiKey = llmApiKey;
     }
 
+    /**
+     * 获取 LLM 接口地址。
+     *
+     * @return 接口基地址
+     */
     public String getLlmBaseUrl() {
         return llmBaseUrl;
     }
 
+    /**
+     * 设置 LLM 接口地址。
+     *
+     * @param llmBaseUrl 接口基地址
+     */
     public void setLlmBaseUrl(String llmBaseUrl) {
         this.llmBaseUrl = llmBaseUrl;
     }
 
+    /**
+     * 获取 LLM 模型名称。
+     *
+     * @return 模型标识
+     */
     public String getLlmModel() {
         return llmModel;
     }
 
+    /**
+     * 设置 LLM 模型名称。
+     *
+     * @param llmModel 模型标识
+     */
     public void setLlmModel(String llmModel) {
         this.llmModel = llmModel;
     }
 
+    /**
+     * 获取 LLM 超时时间。
+     *
+     * @return 超时秒数
+     */
     public int getLlmTimeoutSeconds() {
         return llmTimeoutSeconds;
     }
 
+    /**
+     * 设置 LLM 超时时间。
+     *
+     * @param llmTimeoutSeconds 超时秒数
+     */
     public void setLlmTimeoutSeconds(int llmTimeoutSeconds) {
         this.llmTimeoutSeconds = llmTimeoutSeconds;
     }
 
+    /**
+     * 获取 LLM 最大重试次数。
+     *
+     * @return 重试次数
+     */
     public int getLlmMaxRetries() {
         return llmMaxRetries;
     }
 
+    /**
+     * 设置 LLM 最大重试次数。
+     *
+     * @param llmMaxRetries 重试次数
+     */
     public void setLlmMaxRetries(int llmMaxRetries) {
         this.llmMaxRetries = llmMaxRetries;
     }
 
+    /**
+     * 获取 LLM 重试退避时间。
+     *
+     * @return 退避秒数
+     */
     public double getLlmRetryBackoffSeconds() {
         return llmRetryBackoffSeconds;
     }
 
+    /**
+     * 设置 LLM 重试退避时间。
+     *
+     * @param llmRetryBackoffSeconds 退避秒数
+     */
     public void setLlmRetryBackoffSeconds(double llmRetryBackoffSeconds) {
         this.llmRetryBackoffSeconds = llmRetryBackoffSeconds;
     }
 
+    /**
+     * 获取 B 站登录态 SESSDATA。
+     *
+     * @return SESSDATA 值
+     */
     public String getBiliSessdata() {
         return biliSessdata;
     }
 
+    /**
+     * 设置 B 站登录态 SESSDATA。
+     *
+     * @param biliSessdata SESSDATA 值
+     */
     public void setBiliSessdata(String biliSessdata) {
         this.biliSessdata = biliSessdata;
     }
 
+    /**
+     * 获取 B 站 CSRF Token。
+     *
+     * @return bili_jct 值
+     */
     public String getBiliBiliJct() {
         return biliBiliJct;
     }
 
+    /**
+     * 设置 B 站 CSRF Token。
+     *
+     * @param biliBiliJct bili_jct 值
+     */
     public void setBiliBiliJct(String biliBiliJct) {
         this.biliBiliJct = biliBiliJct;
     }
 
+    /**
+     * 获取默认分区。
+     *
+     * @return 默认分区标识
+     */
     public String getDefaultPartition() {
         return defaultPartition;
     }
 
+    /**
+     * 设置默认分区。
+     *
+     * @param defaultPartition 默认分区标识
+     */
     public void setDefaultPartition(String defaultPartition) {
         this.defaultPartition = defaultPartition;
     }
 
+    /**
+     * 获取默认对标 UP 列表。
+     *
+     * @return 逗号分隔的 UP 主 ID
+     */
     public String getDefaultPeerUps() {
         return defaultPeerUps;
     }
 
+    /**
+     * 设置默认对标 UP 列表。
+     *
+     * @param defaultPeerUps 逗号分隔的 UP 主 ID
+     */
     public void setDefaultPeerUps(String defaultPeerUps) {
         this.defaultPeerUps = defaultPeerUps;
     }
 
+    /**
+     * 解析默认对标 UP 主 ID 列表。
+     *
+     * @return 对标 UP 主 ID 集合
+     */
     public List<Integer> defaultPeerUpIds() {
         if (defaultPeerUps == null || defaultPeerUps.isBlank()) {
             return new ArrayList<>();
@@ -166,6 +301,12 @@ public class AppProperties {
                 .collect(Collectors.toCollection(ArrayList::new));
     }
 
+    /**
+     * 规范化分区名称。
+     *
+     * @param partitionName 原始分区名称
+     * @return 规范化后的分区标识
+     */
     public String normalizePartition(String partitionName) {
         String name = partitionName == null || partitionName.isBlank()
                 ? defaultPartition
@@ -174,14 +315,30 @@ public class AppProperties {
         return PARTITION_TIDS.containsKey(normalized) ? normalized : "knowledge";
     }
 
+    /**
+     * 判断是否启用了 LLM。
+     *
+     * @return 是否已配置可用的 LLM Key
+     */
     public boolean llmEnabled() {
         return llmApiKey != null && !llmApiKey.isBlank();
     }
 
+    /**
+     * 返回当前运行模式。
+     *
+     * @return `llm_agent` 或 `rules`
+     */
     public String runtimeMode() {
         return llmEnabled() ? "llm_agent" : "rules";
     }
 
+    /**
+     * 根据分区名称获取对应的 tid。
+     *
+     * @param partitionName 分区名称
+     * @return B 站分区 tid
+     */
     public int partitionTid(String partitionName) {
         return PARTITION_TIDS.get(normalizePartition(partitionName));
     }

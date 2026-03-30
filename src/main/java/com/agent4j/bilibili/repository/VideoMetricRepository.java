@@ -12,11 +12,20 @@ public class VideoMetricRepository {
 
     private final JdbcTemplate jdbcTemplate;
 
+    /**
+     * 创建视频指标仓库。
+     *
+     * @param jdbcTemplate 数据库访问模板
+     */
     public VideoMetricRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
         initialize();
     }
 
+    /**
+     * 初始化视频指标表结构。
+     * 当目标表不存在时自动创建，确保后续读写正常执行。
+     */
     private void initialize() {
         jdbcTemplate.execute("""
                 CREATE TABLE IF NOT EXISTS video_metrics (
@@ -41,6 +50,11 @@ public class VideoMetricRepository {
                 """);
     }
 
+    /**
+     * 保存一次视频指标快照。
+     *
+     * @param metrics 视频指标对象
+     */
     public void saveVideoMetrics(VideoMetrics metrics) {
         jdbcTemplate.update("""
                         INSERT INTO video_metrics (
@@ -66,6 +80,13 @@ public class VideoMetricRepository {
                 LocalDateTime.now().withNano(0).toString());
     }
 
+    /**
+     * 查询指定视频的历史指标记录。
+     *
+     * @param bvid BV 号
+     * @param limit 返回条数
+     * @return 按时间倒序排列的历史记录
+     */
     public List<Map<String, Object>> getHistory(String bvid, int limit) {
         return jdbcTemplate.queryForList("""
                         SELECT * FROM video_metrics
@@ -77,6 +98,12 @@ public class VideoMetricRepository {
                 limit);
     }
 
+    /**
+     * 获取指定视频的最新指标快照。
+     *
+     * @param bvid BV 号
+     * @return 最新一条指标记录
+     */
     public Map<String, Object> latestSnapshot(String bvid) {
         List<Map<String, Object>> history = getHistory(bvid, 1);
         return history.isEmpty() ? null : history.get(0);

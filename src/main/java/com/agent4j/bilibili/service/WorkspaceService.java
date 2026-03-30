@@ -32,6 +32,20 @@ public class WorkspaceService {
     private final LlmClientService llmClientService;
     private final LlmWorkspaceAgentService llmWorkspaceAgentService;
 
+    /**
+     * 创建工作台服务并注入所需依赖
+     * @param properties 应用配置
+     * @param topicService 选题服务
+     * @param topicDataService 选题数据服务
+     * @param copywritingService 文案服务
+     * @param interactionService 互动运营服务
+     * @param optimizationService 优化服务
+     * @param videoResolverService 视频解析服务
+     * @param runtimeInfoService 运行信息服务
+     * @param referenceVideoService 参考视频服务
+     * @param llmClientService LLM 客户端服务
+     * @param llmWorkspaceAgentService 工作台 Agent 服务
+     */
     public WorkspaceService(
             AppProperties properties,
             TopicService topicService,
@@ -58,14 +72,30 @@ public class WorkspaceService {
         this.llmWorkspaceAgentService = llmWorkspaceAgentService;
     }
 
+    /**
+     * 获取工作台运行时信息
+     * @return 当前模式与能力状态
+     */
     public Map<String, Object> runtimeInfo() {
         return runtimeInfoService.buildRuntimePayload();
     }
 
+    /**
+     * 解析 B 站视频链接并返回基础信息
+     * @param url 原始 B 站链接
+     * @return 标准化后的视频结构化数据
+     */
     public Map<String, Object> resolveBiliLink(String url) {
         return videoResolverService.resolveVideoPayload(url);
     }
 
+    /**
+     * 根据分区、UP 主和种子选题生成候选选题
+     * @param partitionName 目标分区名称
+     * @param upIds 对标 UP 主 ID 列表
+     * @param seedTopic 种子选题
+     * @return 包含创意列表、来源统计和参考视频的结果
+     */
     public Map<String, Object> runTopic(String partitionName, List<Integer> upIds, String seedTopic) {
         TopicService.TopicResult result = topicService.run(partitionName, upIds, seedTopic);
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -76,18 +106,44 @@ public class WorkspaceService {
         return payload;
     }
 
+    /**
+     * 根据选题和风格生成文案结果
+     * @param topic 目标选题
+     * @param style 文案风格
+     * @return 标题、脚本、简介和标签结果
+     */
     public CopywritingResult runCopy(String topic, String style) {
         return copywritingService.run(topic, null, style);
     }
 
+    /**
+     * 执行视频互动运营流程
+     * @param bvId 目标视频 BV 号
+     * @param dryRun 是否仅模拟执行
+     * @return 互动操作结果
+     */
     public OperationResult runOperate(String bvId, boolean dryRun) {
         return interactionService.processVideoInteractions(bvId, dryRun);
     }
 
+    /**
+     * 根据视频表现生成优化建议
+     * @param bvId 目标视频 BV 号
+     * @return 标题、封面和内容优化建议
+     */
     public OptimizationSuggestion runOptimize(String bvId) {
         return optimizationService.run(bvId, List.of());
     }
 
+    /**
+     * 串联选题、文案、运营和优化流程
+     * @param bvId 目标视频 BV 号
+     * @param partitionName 目标分区名称
+     * @param upIds 对标 UP 主 ID 列表
+     * @param style 文案风格
+     * @param seedTopic 种子选题
+     * @return 工作流聚合结果
+     */
     public Map<String, Object> runPipeline(String bvId, String partitionName, List<Integer> upIds, String style, String seedTopic) {
         Map<String, Object> payload = new LinkedHashMap<>();
         Map<String, Object> topicResult = runTopic(partitionName, upIds, seedTopic);
@@ -99,6 +155,11 @@ public class WorkspaceService {
         return payload;
     }
 
+    /**
+     * 构建创作模块结果
+     * @param data 创作输入数据
+     * @return 选题、文案和创作者画像结果
+     */
     public Map<String, Object> moduleCreate(Map<String, Object> data) {
         if (properties.llmEnabled()) {
             try {
@@ -134,6 +195,11 @@ public class WorkspaceService {
         return payload;
     }
 
+    /**
+     * 构建视频分析模块结果
+     * @param data 分析输入数据
+     * @return 解析信息、表现判断和优化结论
+     */
     public Map<String, Object> moduleAnalyze(Map<String, Object> data) {
         String url = stringValue(data.get("url"));
         // Reuse the already resolved payload when it still matches the current link to avoid duplicate parsing.
@@ -197,6 +263,11 @@ public class WorkspaceService {
         return payload;
     }
 
+    /**
+     * 处理工作台智能助手对话
+     * @param data 对话输入数据
+     * @return 助手回复、建议动作和参考链接
+     */
     public Map<String, Object> chat(Map<String, Object> data) {
         if (!properties.llmEnabled()) {
             throw new IllegalStateException("当前是无 Key 规则模式，智能对话助手仅在配置 LLM_API_KEY 后可用。");
@@ -255,6 +326,12 @@ public class WorkspaceService {
         return payload;
     }
 
+    /**
+     * 汇总分区热榜和对标样本构建市场快照
+     * @param partitionName 目标分区名称
+     * @param upIds 对标 UP 主 ID 列表
+     * @return 市场样本快照结果
+     */
     public Map<String, Object> buildMarketSnapshot(String partitionName, List<Integer> upIds) {
         String normalized = properties.normalizePartition(partitionName);
         List<VideoMetrics> hotBoard = safeFetch(() -> topicDataService.fetchHotVideos().stream().limit(6).collect(Collectors.toList()));
@@ -271,6 +348,11 @@ public class WorkspaceService {
         return payload;
     }
 
+    /**
+     * 根据播放和互动指标判断视频表现
+     * @param resolved 已解析视频数据
+     * @return 热度标签、评分和原因说明
+     */
     public Map<String, Object> classifyVideoPerformance(Map<String, Object> resolved) {
         Map<String, Object> stats = map(resolved.get("stats"));
         int view = TextUtils.safeInt(stats.get("view"));
@@ -367,6 +449,13 @@ public class WorkspaceService {
         return payload;
     }
 
+    /**
+     * 为高表现视频整理延展分析
+     * @param resolved 已解析视频数据
+     * @param performance 表现判断结果
+     * @param topicResult 选题结果
+     * @return 分析要点和后续选题
+     */
     public Map<String, Object> buildHotAnalysis(Map<String, Object> resolved, Map<String, Object> performance, Map<String, Object> topicResult) {
         List<String> followupTopics = readTopicIdeas(topicResult).stream().map(TopicIdea::getTopic).filter(value -> !value.isBlank()).limit(3).collect(Collectors.toList());
         List<String> analysisPoints = new ArrayList<>(readStringList(performance.get("reasons")));
@@ -378,6 +467,14 @@ public class WorkspaceService {
         return Map.of("analysis_points", analysisPoints, "followup_topics", followupTopics);
     }
 
+    /**
+     * 为低表现视频整理优化分析
+     * @param resolved 已解析视频数据
+     * @param performance 表现判断结果
+     * @param optimizeResult 优化建议
+     * @param topicResult 选题结果
+     * @return 问题原因和优化方向结果
+     */
     public Map<String, Object> buildLowPerformanceAnalysis(
             Map<String, Object> resolved,
             Map<String, Object> performance,
@@ -396,6 +493,11 @@ public class WorkspaceService {
         );
     }
 
+    /**
+     * 在 Agent 失败时直接调用 LLM 生成创作结果
+     * @param data 创作输入数据
+     * @return LLM 回退生成结果
+     */
     private Map<String, Object> runLlmModuleCreateFallback(Map<String, Object> data) {
         String field = stringValue(data.get("field"));
         String direction = stringValue(data.get("direction"));
@@ -438,6 +540,13 @@ public class WorkspaceService {
         return payload;
     }
 
+    /**
+     * 在 Agent 失败时直接调用 LLM 生成分析结果
+     * @param data 分析输入数据
+     * @param resolved 已解析视频数据
+     * @param marketSnapshot 市场快照数据
+     * @return LLM 回退分析结果
+     */
     private Map<String, Object> runLlmModuleAnalyzeFallback(Map<String, Object> data, Map<String, Object> resolved, Map<String, Object> marketSnapshot) {
         JsonNode result = llmClientService.invokeJsonRequired(
                 "你是 B 站视频分析助手。请直接完成爆款/低表现判断、原因拆解、优化建议和后续选题。只返回 JSON。",
@@ -472,6 +581,13 @@ public class WorkspaceService {
         return payload;
     }
 
+    /**
+     * 组合创作者信息和想法生成种子选题
+     * @param field 内容领域
+     * @param direction 创作方向
+     * @param idea 补充创意
+     * @return 种子选题文本
+     */
     private String buildSeedTopic(String field, String direction, String idea) {
         String profile = refineCreatorProfile(field, direction, idea);
         String rawIdea = stringValue(idea);
@@ -484,6 +600,13 @@ public class WorkspaceService {
         return profile + rawIdea;
     }
 
+    /**
+     * 整理创作者领域和方向描述
+     * @param field 内容领域
+     * @param direction 创作方向
+     * @param idea 补充创意
+     * @return 归一化后的创作者画像
+     */
     private String refineCreatorProfile(String field, String direction, String idea) {
         String profile = (stringValue(field) + stringValue(direction)).replaceAll("\\s+", "");
         String combined = (field + " " + direction + " " + idea);
@@ -493,6 +616,11 @@ public class WorkspaceService {
         return profile.isBlank() ? "这类账号" : profile;
     }
 
+    /**
+     * 检查标题中的亮点信号
+     * @param title 视频标题
+     * @return 标题优势说明列表
+     */
     private List<String> inspectTitleStrength(String title) {
         List<String> points = new ArrayList<>();
         if (title.matches(".*\\d.*")) {
@@ -513,6 +641,11 @@ public class WorkspaceService {
         return points;
     }
 
+    /**
+     * 将原始对象安全转换为视频指标列表
+     * @param raw 原始列表对象
+     * @return 视频指标列表
+     */
     @SuppressWarnings("unchecked")
     private List<VideoMetrics> castVideoMetrics(Object raw) {
         if (raw instanceof List<?> list) {
@@ -521,6 +654,12 @@ public class WorkspaceService {
         return List.of();
     }
 
+    /**
+     * 从选题结果中提取首个选题
+     * @param topicResult 选题结果
+     * @param fallback 回退选题
+     * @return 优先使用的选题文本
+     */
     private String extractTopTopic(Map<String, Object> topicResult, String fallback) {
         List<TopicIdea> ideas = readTopicIdeas(topicResult);
         if (!ideas.isEmpty()) {
@@ -529,6 +668,11 @@ public class WorkspaceService {
         return fallback == null || fallback.isBlank() ? "B站内容选题" : fallback;
     }
 
+    /**
+     * 从选题结果中读取创意列表
+     * @param topicResult 选题结果
+     * @return 选题创意对象列表
+     */
     private List<TopicIdea> readTopicIdeas(Map<String, Object> topicResult) {
         Object raw = topicResult.get("ideas");
         if (raw instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof TopicIdea) {
@@ -537,6 +681,11 @@ public class WorkspaceService {
         return List.of();
     }
 
+    /**
+     * 将原始列表转换为整数列表
+     * @param raw 原始列表对象
+     * @return 整数列表
+     */
     private List<Integer> readIntegerList(Object raw) {
         if (!(raw instanceof List<?> list)) {
             return List.of();
@@ -544,6 +693,11 @@ public class WorkspaceService {
         return list.stream().map(TextUtils::safeInt).collect(Collectors.toList());
     }
 
+    /**
+     * 将原始列表转换为字符串列表
+     * @param raw 原始列表对象
+     * @return 字符串列表
+     */
     private List<String> readStringList(Object raw) {
         if (!(raw instanceof List<?> list)) {
             return List.of();
@@ -551,6 +705,11 @@ public class WorkspaceService {
         return list.stream().map(String::valueOf).collect(Collectors.toList());
     }
 
+    /**
+     * 将任意映射对象转换为字符串键 Map
+     * @param raw 原始映射对象
+     * @return 转换后的 Map 结果
+     */
     private Map<String, Object> map(Object raw) {
         if (raw instanceof Map<?, ?> source) {
             Map<String, Object> result = new LinkedHashMap<>();
@@ -560,6 +719,11 @@ public class WorkspaceService {
         return new LinkedHashMap<>();
     }
 
+    /**
+     * 将 JsonNode 转换为 Map 结构
+     * @param node JSON 节点
+     * @return 转换后的 Map 结果
+     */
     private Map<String, Object> toMap(JsonNode node) {
         return new com.fasterxml.jackson.databind.ObjectMapper().convertValue(
                 node,
@@ -568,19 +732,41 @@ public class WorkspaceService {
         );
     }
 
+    /**
+     * 将对象转换为去空白字符串
+     * @param value 原始值
+     * @return 字符串结果
+     */
     private String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
     }
 
+    /**
+     * 读取 JsonNode 字段并提供默认值
+     * @param node JSON 节点
+     * @param field 字段名
+     * @param fallback 默认值
+     * @return 字符串结果
+     */
     private String stringOrDefault(JsonNode node, String field, String fallback) {
         String value = JsonUtils.text(node, field);
         return value == null || value.isBlank() ? fallback : value;
     }
 
+    /**
+     * 将小数格式化为百分比字符串
+     * @param value 百分比小数值
+     * @return 百分比文本
+     */
     private String formatPercent(double value) {
         return String.format(Locale.ROOT, "%.2f%%", value * 100);
     }
 
+    /**
+     * 安全执行数据拉取并在失败时返回空列表
+     * @param supplier 数据拉取回调
+     * @return 结果列表
+     */
     private <T> List<T> safeFetch(java.util.concurrent.Callable<List<T>> supplier) {
         try {
             return supplier.call();

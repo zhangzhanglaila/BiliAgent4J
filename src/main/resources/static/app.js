@@ -29,9 +29,24 @@ const state = {
   isListening: false,
 };
 
+/**
+ * 查询首个匹配的页面元素
+ * @param {string} selector CSS 选择器
+ * @returns {Element|null} 匹配到的元素
+ */
 const $ = selector => document.querySelector(selector);
+/**
+ * 查询所有匹配元素并返回数组
+ * @param {string} selector CSS 选择器
+ * @returns {Element[]} 元素数组
+ */
 const $$ = selector => Array.from(document.querySelectorAll(selector));
 
+/**
+ * 转义 HTML 特殊字符
+ * @param {*} value 原始值
+ * @returns {string} 安全字符串
+ */
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -41,19 +56,39 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+/**
+ * 转义文本并保留换行显示
+ * @param {*} value 原始值
+ * @returns {string} 可直接渲染的富文本字符串
+ */
 function rich(value) {
   return escapeHtml(value || '').replace(/\n/g, '<br>');
 }
 
+/**
+ * 按中文习惯格式化数字
+ * @param {*} value 原始值
+ * @returns {string} 格式化后的数字文本
+ */
 function num(value) {
   const n = Number(value || 0);
   return Number.isFinite(n) ? n.toLocaleString('zh-CN') : '0';
 }
 
+/**
+ * 将小数格式化为百分比文本
+ * @param {*} value 原始值
+ * @returns {string} 百分比文本
+ */
 function pct(value) {
   return `${(Number(value || 0) * 100).toFixed(2)}%`;
 }
 
+/**
+ * 规范化封面地址
+ * @param {string} url 原始地址
+ * @returns {string} 可直接访问的封面地址
+ */
 function coverUrl(url) {
   const v = String(url || '').trim();
   if (!v) return '';
@@ -65,6 +100,13 @@ function coverUrl(url) {
 const COVER_RETRY_LIMIT = 2;
 const COVER_RETRY_BASE_DELAY_MS = 900;
 
+/**
+ * 渲染封面媒体结构
+ * @param {string} url 封面地址
+ * @param {string} title 封面标题
+ * @param {string} variant 展示样式
+ * @returns {string} 封面 HTML
+ */
 function renderCoverMedia(url, title, variant = 'card') {
   const safeUrl = coverUrl(url);
   const safeTitle = title || '视频封面';
@@ -85,6 +127,12 @@ function renderCoverMedia(url, title, variant = 'card') {
   `;
 }
 
+/**
+ * 生成带重试标记的封面地址
+ * @param {string} src 原始封面地址
+ * @param {*} attempt 当前重试次数
+ * @returns {string} 重试地址
+ */
 function coverRetrySrc(src, attempt) {
   if (!src) return '';
   try {
@@ -97,6 +145,11 @@ function coverRetrySrc(src, attempt) {
   }
 }
 
+/**
+ * 切换封面组件的显示状态
+ * @param {*} frame 封面容器
+ * @param {*} nextState 目标状态
+ */
 function setCoverFrameState(frame, nextState) {
   if (!frame) return;
   const loader = frame.querySelector('[data-cover-loader]');
@@ -121,6 +174,11 @@ function setCoverFrameState(frame, nextState) {
   }
 }
 
+/**
+ * 将封面切换到兜底展示状态
+ * @param {*} frame 封面容器
+ * @param {*} img 封面图片节点
+ */
 function finalizeCoverFallback(frame, img) {
   if (img) {
     img.hidden = true;
@@ -130,6 +188,11 @@ function finalizeCoverFallback(frame, img) {
   setCoverFrameState(frame, 'fallback');
 }
 
+/**
+ * 按次数延迟重试封面加载
+ * @param {*} img 封面图片节点
+ * @param {*} frame 封面容器
+ */
 function scheduleCoverRetry(img, frame) {
   const retries = Number(img?.dataset.retryCount || 0);
   if (!img || !frame) return;
@@ -153,6 +216,10 @@ function scheduleCoverRetry(img, frame) {
   }, retryDelay);
 }
 
+/**
+ * 为封面图片绑定加载和重试逻辑
+ * @param {*} img 封面图片节点
+ */
 function bindCoverImage(img) {
   if (!img || img.dataset.coverBound === '1') return;
   img.dataset.coverBound = '1';
@@ -163,6 +230,9 @@ function bindCoverImage(img) {
     img.dataset.originalSrc = img.getAttribute('data-original-src') || img.currentSrc || img.src || '';
   }
 
+  /**
+   * 处理封面加载成功
+   */
   const handleLoad = () => {
     if (!img.naturalWidth) {
       scheduleCoverRetry(img, frame);
@@ -171,6 +241,9 @@ function bindCoverImage(img) {
     setCoverFrameState(frame, 'loaded');
   };
 
+  /**
+   * 处理封面加载失败
+   */
   const handleError = () => {
     scheduleCoverRetry(img, frame);
   };
@@ -185,6 +258,10 @@ function bindCoverImage(img) {
   }
 }
 
+/**
+ * 扫描并绑定范围内的封面节点
+ * @param {*} scope 查询范围
+ */
 function bindCoverMedia(scope = document) {
   const root = scope && typeof scope.querySelectorAll === 'function' ? scope : document;
   if (root.matches && root.matches('[data-cover-image]')) {
@@ -208,6 +285,9 @@ function bindCoverMedia(scope = document) {
   });
 }
 
+/**
+ * 初始化封面观察和动态绑定逻辑
+ */
 function initCoverMedia() {
   bindCoverMedia(document);
   if (state.coverObserver) {
@@ -230,6 +310,11 @@ function initCoverMedia() {
   state.coverObserver.observe(document.body, { childList: true, subtree: true });
 }
 
+/**
+ * 更新全局状态文案和样式
+ * @param {string} text 状态文本
+ * @param {*} type 状态类型
+ */
 function setStatus(text, type = 'idle') {
   const pill = $('#globalStatusPill');
   if (!pill) return;
@@ -241,6 +326,12 @@ function setStatus(text, type = 'idle') {
   $('#currentModeText').textContent = text;
 }
 
+/**
+ * 显示顶部消息提示
+ * @param {string} title 标题
+ * @param {string} message 提示内容
+ * @param {*} type 提示类型
+ */
 function showToast(title, message, type = 'success') {
   const stack = $('#toastStack');
   if (!stack) return;
@@ -251,6 +342,11 @@ function showToast(title, message, type = 'success') {
   setTimeout(() => node.remove(), 2800);
 }
 
+/**
+ * 切换按钮加载状态
+ * @param {string} id 按钮 ID
+ * @param {boolean} loading 是否加载中
+ */
 function setButtonLoading(id, loading) {
   const button = document.getElementById(id);
   if (!button) return;
@@ -258,30 +354,59 @@ function setButtonLoading(id, loading) {
   button.classList.toggle('is-loading', loading);
 }
 
+/**
+ * 按内容高度自适应文本域
+ * @param {*} el 文本域节点
+ */
 function autosize(el) {
   if (!el) return;
   el.style.height = 'auto';
   el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
 }
 
+/**
+ * 延迟指定毫秒后继续执行
+ * @param {*} ms 延迟毫秒数
+ * @returns {Promise<void>} 延迟 Promise
+ */
 function sleep(ms) {
   return new Promise(resolve => window.setTimeout(resolve, ms));
 }
 
+/**
+ * 将百分比限制在 0 到 100
+ * @param {*} value 原始值
+ * @returns {number} 限制后的整数百分比
+ */
 function clampPercent(value) {
   return Math.max(0, Math.min(100, Math.round(value || 0)));
 }
 
+/**
+ * 将进度值限制在 0 到 100
+ * @param {*} value 原始值
+ * @returns {number} 限制后的进度值
+ */
 function clampProgressValue(value) {
   return Math.max(0, Math.min(100, Number(value || 0)));
 }
 
+/**
+ * 格式化进度显示文本
+ * @param {*} value 原始进度值
+ * @returns {string} 进度标签文本
+ */
 function formatProgressLabel(value) {
   const safe = clampProgressValue(value);
   if (safe >= 100) return '100%';
   return `${safe.toFixed(1)}%`;
 }
 
+/**
+ * 停止进度任务并可写入最终进度
+ * @param {string} key 任务键
+ * @param {*} finalPercent 最终进度
+ */
 function stopProgressJob(key, finalPercent = null) {
   const job = state.progressJobs[key];
   if (!job) return;
@@ -295,6 +420,12 @@ function stopProgressJob(key, finalPercent = null) {
   delete state.progressJobs[key];
 }
 
+/**
+ * 启动平滑递进的进度任务
+ * @param {string} key 任务键
+ * @param {*} onUpdate 进度回调
+ * @param {Object} options 进度配置
+ */
 function startProgressJob(key, onUpdate, options = {}) {
   stopProgressJob(key);
   const start = clampProgressValue(options.start ?? 6);
@@ -350,10 +481,22 @@ function startProgressJob(key, onUpdate, options = {}) {
   return job;
 }
 
+/**
+ * 读取当前进度值
+ * @param {string} key 任务键
+ * @param {*} fallback 默认进度
+ * @returns {number} 当前进度值
+ */
 function getProgressPercent(key, fallback = 0) {
   return clampProgressValue(state.progressJobs[key]?.percent ?? fallback);
 }
 
+/**
+ * 发送 JSON POST 请求并返回业务数据
+ * @param {string} url 请求地址
+ * @param {Object} payload 请求体
+ * @returns {Promise<*>} 接口返回的数据
+ */
 async function requestJson(url, payload) {
   try {
     const res = await fetch(url, {
@@ -372,6 +515,11 @@ async function requestJson(url, payload) {
   }
 }
 
+/**
+ * 发送 GET 请求并返回业务数据
+ * @param {string} url 请求地址
+ * @returns {Promise<*>} 接口返回的数据
+ */
 async function requestGetJson(url) {
   try {
     const res = await fetch(url);
@@ -386,6 +534,12 @@ async function requestGetJson(url) {
   }
 }
 
+/**
+ * 复制文本并提示结果
+ * @param {string} text 要复制的内容
+ * @param {string} label 提示名称
+ * @returns {Promise<void>} 复制 Promise
+ */
 async function copyText(text, label = '内容') {
   try {
     await navigator.clipboard.writeText(text);
@@ -395,6 +549,10 @@ async function copyText(text, label = '内容') {
   }
 }
 
+/**
+ * 为复制按钮绑定点击事件
+ * @param {*} scope 查询范围
+ */
 function bindCopyButtons(scope = document) {
   scope.querySelectorAll('[data-copy]').forEach(button => {
     if (button.dataset.copyBound === '1') return;
@@ -403,6 +561,11 @@ function bindCopyButtons(scope = document) {
   });
 }
 
+/**
+ * 渲染标签列表
+ * @param {Array} items 标签列表
+ * @returns {string} 标签 HTML
+ */
 function tags(items = []) {
   const list = Array.isArray(items) ? items.filter(Boolean) : [];
   return list.length
@@ -410,6 +573,13 @@ function tags(items = []) {
     : '<p class="section-note">暂无标签</p>';
 }
 
+/**
+ * 渲染基础加载卡片
+ * @param {string} title 标题
+ * @param {*} desc 描述
+ * @param {Array} steps 步骤列表
+ * @returns {string} 加载卡片 HTML
+ */
 function loadingCard(title, desc, steps = []) {
   return `
     <section class="loading-card">
@@ -423,19 +593,45 @@ function loadingCard(title, desc, steps = []) {
   `;
 }
 
+/**
+ * 渲染提示信息卡片
+ * @param {string} title 标题
+ * @param {string} text 内容
+ * @param {*} tone 语气样式
+ * @returns {string} 信息卡片 HTML
+ */
 function infoCard(title, text, tone = '') {
   return `<div class="info-card ${tone ? `info-card--${tone}` : ''}"><h4>${escapeHtml(title)}</h4><p>${escapeHtml(text)}</p></div>`;
 }
 
+/**
+ * 渲染可占位的预览卡片
+ * @param {string} label 标题
+ * @param {*} value 展示值
+ * @param {*} hint 提示文案
+ * @returns {string} 预览卡片 HTML
+ */
 function previewCard(label, value, hint = '根据视频链接自动解析') {
   const ok = value !== undefined && value !== null && String(value).trim() !== '';
   return `<div class="stat-card preview-card" title="${escapeHtml(hint)}"><h4>${escapeHtml(label)}</h4><span class="stat-card__value ${ok ? '' : 'is-placeholder'}">${ok ? escapeHtml(value) : '待解析'}</span></div>`;
 }
 
+/**
+ * 渲染指标卡片
+ * @param {string} label 标题
+ * @param {*} value 展示值
+ * @param {*} hint 提示文案
+ * @returns {string} 指标卡片 HTML
+ */
 function metricCard(label, value, hint = '') {
   return `<div class="stat-card" title="${escapeHtml(hint)}"><h4>${escapeHtml(label)}</h4><span class="stat-card__value">${escapeHtml(value)}</span>${hint ? `<p>${escapeHtml(hint)}</p>` : ''}</div>`;
 }
 
+/**
+ * 渲染选题创意列表
+ * @param {*} topicResult 选题结果
+ * @returns {string} 创意列表 HTML
+ */
 function renderIdeas(topicResult) {
   const ideas = topicResult?.ideas || [];
   if (!ideas.length) return infoCard('暂无选题建议', '当前没有可展示的选题结果。');
@@ -451,6 +647,12 @@ function renderIdeas(topicResult) {
   `).join('')}</div>`;
 }
 
+/**
+ * 渲染参考视频卡片网格
+ * @param {Array} items 视频列表
+ * @param {boolean} compact 是否使用紧凑样式
+ * @returns {string} 参考视频网格 HTML
+ */
 function referenceGrid(items = [], compact = false) {
   const list = Array.isArray(items) ? items.filter(item => item && item.url) : [];
   if (!list.length) return '';
@@ -470,6 +672,13 @@ function referenceGrid(items = [], compact = false) {
   }).join('')}</div>`;
 }
 
+/**
+ * 渲染参考视频区块
+ * @param {Array} items 视频列表
+ * @param {string} title 区块标题
+ * @param {*} desc 区块说明
+ * @returns {string} 参考区块 HTML
+ */
 function referenceSection(items = [], title = '可直接参考的高表现视频', desc = '点击卡片可直接打开当前做得好的视频页面。') {
   const grid = referenceGrid(items, false);
   return `
@@ -480,6 +689,11 @@ function referenceSection(items = [], title = '可直接参考的高表现视频
   `;
 }
 
+/**
+ * 渲染文案生成结果区
+ * @param {*} copy 文案结果
+ * @returns {string} 文案结果 HTML
+ */
 function copyResult(copy) {
   if (!copy) return infoCard('暂无可直接复用文案', '当前结果里没有新的标题、脚本和简介。');
   const titles = Array.isArray(copy.titles) ? copy.titles.filter(Boolean) : [];
@@ -546,6 +760,11 @@ function copyResult(copy) {
   `;
 }
 
+/**
+ * 渲染创作模块结果
+ * @param {Object} data 创作结果数据
+ * @returns {string} 创作结果 HTML
+ */
 function creatorResult(data) {
   const profile = data.normalized_profile || data.seed_topic || '未整理';
   const question = data.seed_topic || profile || '未整理';
@@ -570,6 +789,12 @@ function creatorResult(data) {
   `;
 }
 
+/**
+ * 渲染视频解析后的预览信息
+ * @param {Object} data 视频数据
+ * @param {Object} options 预览配置
+ * @returns {string} 视频预览 HTML
+ */
 function videoPreview(data, options = {}) {
   const resolved = data || {};
   const stats = resolved.stats || {};
@@ -610,6 +835,11 @@ function videoPreview(data, options = {}) {
   `;
 }
 
+/**
+ * 渲染视频核心指标
+ * @param {Object} resolved 已解析视频数据
+ * @returns {string} 指标区块 HTML
+ */
 function videoMetrics(resolved) {
   const stats = resolved?.stats || {};
   return `
@@ -624,12 +854,22 @@ function videoMetrics(resolved) {
   `;
 }
 
+/**
+ * 渲染分析要点列表
+ * @param {Array} items 条目列表
+ * @returns {string} 要点列表 HTML
+ */
 function bulletList(items = []) {
   const list = Array.isArray(items) ? items.filter(Boolean) : [];
   if (!list.length) return infoCard('暂无内容', '当前没有可展示的分析项。');
   return `<div class="analysis-list">${list.map(item => `<article class="analysis-item"><span class="analysis-item__dot"></span><p>${escapeHtml(item)}</p></article>`).join('')}</div>`;
 }
 
+/**
+ * 渲染助手推荐问题按钮
+ * @param {Array} items 问题列表
+ * @returns {string} 按钮区块 HTML
+ */
 function assistantActionButtons(items = []) {
   const list = Array.isArray(items) ? items.filter(Boolean) : [];
   if (!list.length) return '';
@@ -649,6 +889,13 @@ function assistantActionButtons(items = []) {
   `;
 }
 
+/**
+ * 渲染后续选题区块
+ * @param {Array} items 选题列表
+ * @param {string} title 区块标题
+ * @param {*} desc 区块说明
+ * @returns {string} 选题区块 HTML
+ */
 function topicSection(items = [], title = '后续可做方向', desc = '') {
   const list = Array.isArray(items) ? items.filter(Boolean) : [];
   if (!list.length) return '';
@@ -660,6 +907,13 @@ function topicSection(items = [], title = '后续可做方向', desc = '') {
   `;
 }
 
+/**
+ * 渲染优化建议区块
+ * @param {*} titleSuggestions 标题建议
+ * @param {*} coverSuggestion 封面建议
+ * @param {*} contentSuggestions 内容建议
+ * @returns {string} 优化区块 HTML
+ */
 function optimizeSection(titleSuggestions = [], coverSuggestion = '', contentSuggestions = []) {
   const titles = Array.isArray(titleSuggestions) ? titleSuggestions.filter(Boolean) : [];
   const content = Array.isArray(contentSuggestions) ? contentSuggestions.filter(Boolean) : [];
@@ -674,6 +928,11 @@ function optimizeSection(titleSuggestions = [], coverSuggestion = '', contentSug
   `;
 }
 
+/**
+ * 渲染视频分析结果
+ * @param {Object} data 分析结果数据
+ * @returns {string} 分析结果 HTML
+ */
 function videoResult(data) {
   const resolved = data.resolved || state.videoResolved || {};
   const perf = data.performance || {};
@@ -704,6 +963,10 @@ function videoResult(data) {
   `;
 }
 
+/**
+ * 渲染助手空状态
+ * @returns {string} 空状态 HTML
+ */
 function assistantEmptyState() {
   return `
     <div class="empty-state">
@@ -713,6 +976,10 @@ function assistantEmptyState() {
   `;
 }
 
+/**
+ * 渲染助手等待气泡
+ * @returns {string} 等待气泡 HTML
+ */
 function assistantPendingBubble() {
   return `
     <article class="chat-row chat-row--assistant">
@@ -724,6 +991,11 @@ function assistantPendingBubble() {
   `;
 }
 
+/**
+ * 渲染智能助手对话面板。
+ * 该方法会根据聊天记录、等待状态和参考链接，统一生成当前对话区的显示结果。
+ * 这样界面层只需要传入必要数据，就可以得到结构一致、便于直接插入页面的渲染结果。
+ */
 function renderAssistant() {
   const box = $('#assistantResult');
   if (!box) return;
@@ -764,6 +1036,9 @@ function renderAssistant() {
   });
 }
 
+/**
+ * 将运行时信息同步到界面
+ */
 function updateRuntimeUi() {
   $('#runtimeModeBadge').textContent = `运行模式：${state.runtime.modeLabel}`;
   $('#runtimeModeTitle').textContent = state.runtime.modeTitle;
@@ -786,6 +1061,9 @@ function updateRuntimeUi() {
   renderAssistant();
 }
 
+/**
+ * 更新助手发送按钮状态
+ */
 function updateAssistantButton() {
   const input = $('#assistantMessage');
   const button = $('#assistantSendBtn');
@@ -797,6 +1075,9 @@ function updateAssistantButton() {
   button.setAttribute('aria-label', input.value.trim() ? '发送消息' : '语音输入');
 }
 
+/**
+ * 清空界面结果和会话状态
+ */
 function clearResults() {
   state.videoResolved = null;
   state.videoResolvedUrl = '';
@@ -811,6 +1092,9 @@ function clearResults() {
   setStatus('已清空结果', 'success');
 }
 
+/**
+ * 重置模块悬停样式
+ */
 function syncModuleHover() {
   const heroCard = $('.hero-card');
   const modeBanner = $('.mode-banner');
@@ -841,6 +1125,9 @@ function syncModuleHover() {
   });
 }
 
+/**
+ * 重置全局滚动场景状态
+ */
 function updateGlobalScrollScene() {
   state.moduleSplit = 0.5;
   state.moduleSwapProgress = 0;
@@ -848,18 +1135,33 @@ function updateGlobalScrollScene() {
   syncModuleHover();
 }
 
+/**
+ * 调度全局滚动场景更新
+ */
 function scheduleGlobalScrollSceneUpdate() {
   updateGlobalScrollScene();
 }
 
+/**
+ * 初始化全局滚动场景
+ */
 function initGlobalScrollScene() {
   updateGlobalScrollScene();
 }
 
+/**
+ * 判断当前链接是否已有解析缓存
+ * @param {string} url 视频链接
+ * @returns {boolean} 是否已缓存解析结果
+ */
 function isResolvedForUrl(url) {
   return Boolean(state.videoResolved && state.videoResolvedUrl === String(url || '').trim());
 }
 
+/**
+ * 加载运行时信息并刷新界面
+ * @returns {Promise<void>} 加载 Promise
+ */
 async function loadRuntimeInfo() {
   try {
     const data = await requestGetJson('/api/runtime-info');
@@ -879,6 +1181,13 @@ async function loadRuntimeInfo() {
   }
 }
 
+/**
+ * 解析视频链接并刷新预览区
+ * @param {string} url 视频链接
+ * @param {*} seq 当前解析序号
+ * @param {Object} options 解析配置
+ * @returns {Promise<*>} 解析结果
+ */
 async function resolveVideoLink(url, seq = ++state.videoResolveSeq, options = {}) {
   const currentUrl = String(url || '').trim();
   if (!currentUrl) {
@@ -914,6 +1223,9 @@ async function resolveVideoLink(url, seq = ++state.videoResolveSeq, options = {}
   }
 }
 
+/**
+ * 延迟触发视频链接解析
+ */
 function scheduleVideoResolve() {
   const url = ($('#videoLink').value || '').trim();
   state.videoResolveSeq += 1;
@@ -931,6 +1243,11 @@ function scheduleVideoResolve() {
   }, 550);
 }
 
+/**
+ * 获取当前模块的大纲条目
+ * @param {string} module 模块名
+ * @returns {Array} 大纲条目列表
+ */
 function getOutlineItems(module = state.activeModule) {
   return [];
   const common = [
@@ -966,6 +1283,9 @@ function getOutlineItems(module = state.activeModule) {
     });
 }
 
+/**
+ * 更新大纲高亮状态
+ */
 function updateOutlineActiveState() {
   return;
   if (!$('#workspaceOutline')) return;
@@ -985,6 +1305,9 @@ function updateOutlineActiveState() {
   });
 }
 
+/**
+ * 渲染工作台大纲
+ */
 function renderWorkspaceOutline() {
   return;
   const box = $('#workspaceOutline');
@@ -1016,6 +1339,11 @@ function renderWorkspaceOutline() {
   updateOutlineActiveState();
 }
 
+/**
+ * 切换当前激活模块
+ * @param {string} module 模块名
+ * @param {Object} options 切换配置
+ */
 function setActiveModule(module, options = {}) {
   const next = module === 'create' ? 'create' : 'analyze';
   state.activeModule = next;
@@ -1033,6 +1361,10 @@ function setActiveModule(module, options = {}) {
   }
 }
 
+/**
+ * 提交创作模块请求并渲染结果
+ * @returns {Promise<void>} 执行 Promise
+ */
 async function runCreatorModule() {
   const payload = {
     field: ($('#creatorField').value || '').trim(),
@@ -1063,6 +1395,10 @@ async function runCreatorModule() {
   }
 }
 
+/**
+ * 提交分析模块请求并渲染结果
+ * @returns {Promise<void>} 执行 Promise
+ */
 async function runAnalyzeModule() {
   const url = ($('#videoLink').value || '').trim();
   if (!url) {
@@ -1093,6 +1429,10 @@ async function runAnalyzeModule() {
   }
 }
 
+/**
+ * 收集当前页面的对话上下文
+ * @returns {Object} 对话上下文
+ */
 function chatContext() {
   return {
     field: ($('#creatorField').value || '').trim(),
@@ -1104,6 +1444,11 @@ function chatContext() {
   };
 }
 
+/**
+ * 发送助手消息并处理回复展示
+ * @param {*} forced 强制发送的内容
+ * @returns {Promise<void>} 发送 Promise
+ */
 async function sendAssistantMessage(forced = '') {
   if (!state.runtime.chatAvailable) {
     showToast('当前不可用', '请先配置 LLM_API_KEY 并重启服务。', 'error');
@@ -1146,6 +1491,9 @@ async function sendAssistantMessage(forced = '') {
   }
 }
 
+/**
+ * 初始化语音识别能力
+ */
 function initSpeechRecognition() {
   const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!Ctor) return;
@@ -1174,6 +1522,9 @@ function initSpeechRecognition() {
   state.recognition = recognition;
 }
 
+/**
+ * 切换语音输入状态
+ */
 function toggleVoiceInput() {
   if (!state.runtime.chatAvailable) return;
   if (!state.recognition) {
@@ -1188,6 +1539,9 @@ function toggleVoiceInput() {
   }
 }
 
+/**
+ * 绑定页面交互事件
+ */
 function initEvents() {
   $('#creatorRunBtn').addEventListener('click', runCreatorModule);
   $('#videoAnalyzeBtn').addEventListener('click', runAnalyzeModule);
@@ -1231,10 +1585,23 @@ function initEvents() {
   });
 }
 
+/**
+ * 读取当前任务进度
+ * @param {string} key 任务键
+ * @returns {number} 当前进度值
+ */
 function currentProgressPercent(key) {
   return getProgressPercent(key, 0);
 }
 
+/**
+ * 按进度渲染加载卡片
+ * @param {string} title 标题
+ * @param {*} desc 描述
+ * @param {Array} steps 步骤列表
+ * @param {*} percent 当前进度
+ * @returns {string} 加载卡片 HTML
+ */
 function loadingCard(title, desc, steps = [], percent = 0) {
   const safePercent = clampProgressValue(percent);
   const activeIndex = steps.length ? Math.min(steps.length - 1, Math.floor((safePercent / 100) * steps.length)) : -1;
@@ -1250,12 +1617,24 @@ function loadingCard(title, desc, steps = [], percent = 0) {
   `;
 }
 
+/**
+ * 将进度卡片渲染到目标容器
+ * @param {*} containerId 容器 ID
+ * @param {string} title 标题
+ * @param {*} desc 描述
+ * @param {Array} steps 步骤列表
+ * @param {*} percent 当前进度
+ */
 function renderProgressInto(containerId, title, desc, steps, percent) {
   const container = document.getElementById(containerId);
   if (!container) return;
   container.innerHTML = loadingCard(title, desc, steps, percent);
 }
 
+/**
+ * 渲染带进度的助手等待气泡
+ * @returns {string} 等待气泡 HTML
+ */
 function assistantPendingBubble() {
   const percent = currentProgressPercent('assistant');
   return `
@@ -1268,6 +1647,11 @@ function assistantPendingBubble() {
   `;
 }
 
+/**
+ * 渲染智能助手对话面板。
+ * 该方法会根据聊天记录、等待状态和参考链接，统一生成当前对话区的显示结果。
+ * 这样界面层只需要传入必要数据，就可以得到结构一致、便于直接插入页面的渲染结果。
+ */
 function renderAssistant() {
   const box = $('#assistantResult');
   if (!box) return;
@@ -1308,6 +1692,9 @@ function renderAssistant() {
   });
 }
 
+/**
+ * 更新助手按钮状态
+ */
 function updateAssistantButton() {
   const input = $('#assistantMessage');
   const button = $('#assistantSendBtn');
@@ -1319,6 +1706,9 @@ function updateAssistantButton() {
   button.setAttribute('aria-label', input.value.trim() ? '发送消息' : '语音输入');
 }
 
+/**
+ * 清空结果并重置进度状态
+ */
 function clearResults() {
   stopProgressJob('creator');
   stopProgressJob('analyze');
@@ -1342,6 +1732,11 @@ function clearResults() {
   setStatus('已清空结果', 'success');
 }
 
+/**
+ * 以打字效果展示助手回复
+ * @param {*} messageItem 助手消息对象
+ * @returns {Promise<void>} 输出 Promise
+ */
 async function typeAssistantReply(messageItem) {
   if (!messageItem) return;
   const fullText = messageItem.fullContent || messageItem.content || '';
@@ -1364,6 +1759,10 @@ async function typeAssistantReply(messageItem) {
   updateAssistantButton();
 }
 
+/**
+ * 带进度地执行创作模块
+ * @returns {Promise<void>} 执行 Promise
+ */
 async function runCreatorModule() {
   const payload = {
     field: ($('#creatorField').value || '').trim(),
@@ -1411,6 +1810,10 @@ async function runCreatorModule() {
   }
 }
 
+/**
+ * 带进度地执行分析模块
+ * @returns {Promise<void>} 执行 Promise
+ */
 async function runAnalyzeModule() {
   const url = ($('#videoLink').value || '').trim();
   if (!url) {
@@ -1458,6 +1861,11 @@ async function runAnalyzeModule() {
   }
 }
 
+/**
+ * 带进度地发送助手消息
+ * @param {*} forced 强制发送的内容
+ * @returns {Promise<void>} 发送 Promise
+ */
 async function sendAssistantMessage(forced = '') {
   if (!state.runtime.chatAvailable) {
     showToast('当前不可用', '请先配置 LLM_API_KEY 并重启服务。', 'error');
@@ -1520,6 +1928,12 @@ async function sendAssistantMessage(forced = '') {
   }
 }
 
+/**
+ * 渲染带进度的视频预览信息
+ * @param {Object} data 视频数据
+ * @param {Object} options 预览配置
+ * @returns {string} 视频预览 HTML
+ */
 function videoPreview(data, options = {}) {
   const resolved = data || {};
   const stats = resolved.stats || {};
@@ -1565,6 +1979,9 @@ function videoPreview(data, options = {}) {
   `;
 }
 
+/**
+ * 初始化整个页面
+ */
 function init() {
   setActiveModule(state.activeModule);
   $('#videoPreview').innerHTML = videoPreview(null);

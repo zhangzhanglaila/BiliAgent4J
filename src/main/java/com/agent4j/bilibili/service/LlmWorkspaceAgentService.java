@@ -20,6 +20,15 @@ public class LlmWorkspaceAgentService {
     private final VideoResolverService videoResolverService;
     private final AppProperties properties;
 
+    /**
+     * 创建 LLM 工作台代理服务。
+     *
+     * @param llmClientService LLM 客户端服务
+     * @param objectMapper JSON 映射器
+     * @param topicDataService 选题数据服务
+     * @param videoResolverService 视频解析服务
+     * @param properties 系统配置
+     */
     public LlmWorkspaceAgentService(
             LlmClientService llmClientService,
             ObjectMapper objectMapper,
@@ -34,6 +43,12 @@ public class LlmWorkspaceAgentService {
         this.properties = properties;
     }
 
+    /**
+     * 运行创作模块，生成选题和文案结果。
+     *
+     * @param data 用户输入数据
+     * @return 模块执行结果
+     */
     public Map<String, Object> runModuleCreate(Map<String, Object> data) {
         Map<String, Object> result = runStructured(
                 "module_create",
@@ -64,6 +79,14 @@ public class LlmWorkspaceAgentService {
         return result;
     }
 
+    /**
+     * 运行分析模块，输出视频分析和优化建议。
+     *
+     * @param data 用户输入数据
+     * @param resolved 视频解析结果
+     * @param marketSnapshot 市场快照
+     * @return 模块执行结果
+     */
     public Map<String, Object> runModuleAnalyze(Map<String, Object> data, Map<String, Object> resolved, Map<String, Object> marketSnapshot) {
         Map<String, Object> result = runStructured(
                 "module_analyze",
@@ -92,6 +115,12 @@ public class LlmWorkspaceAgentService {
         return result;
     }
 
+    /**
+     * 运行工作台对话模块。
+     *
+     * @param data 对话上下文与消息
+     * @return 对话结果
+     */
     public Map<String, Object> runChat(Map<String, Object> data) {
         Map<String, Object> context = map(data.get("context"));
         Map<String, Object> creatorContext = Map.of(
@@ -126,6 +155,19 @@ public class LlmWorkspaceAgentService {
         return result;
     }
 
+    /**
+     * 执行多轮、工具驱动的结构化 Agent 流程。
+     *
+     * @param taskName 任务名称
+     * @param taskGoal 任务目标
+     * @param userPayload 用户载荷
+     * @param responseContract 最终响应契约
+     * @param allowedTools 可用工具列表
+     * @param requiredTools 必须调用的工具列表
+     * @param requiredFinalKeys 最终结果必填字段
+     * @param maxSteps 最大执行步数
+     * @return 最终结构化结果
+     */
     public Map<String, Object> runStructured(
             String taskName,
             String taskGoal,
@@ -202,6 +244,19 @@ public class LlmWorkspaceAgentService {
         throw new IllegalStateException("LLM Agent 未能在限定步骤内完成任务。");
     }
 
+    /**
+     * 构建下一轮 Agent 决策提示词。
+     *
+     * @param taskName 任务名称
+     * @param taskGoal 任务目标
+     * @param userPayload 用户载荷
+     * @param responseContract 最终响应契约
+     * @param allowedTools 可用工具列表
+     * @param requiredTools 必须调用的工具列表
+     * @param usedTools 已调用工具列表
+     * @param scratchpad 历史观察结果
+     * @return 供模型决策的提示词
+     */
     private String buildAgentPrompt(
             String taskName,
             String taskGoal,
@@ -235,6 +290,12 @@ public class LlmWorkspaceAgentService {
                         """ + "\n\n最终响应契约：\n" + responseContract;
     }
 
+    /**
+     * 将工具调用历史格式化为文本块。
+     *
+     * @param scratchpad 历史观察结果
+     * @return 格式化后的调试文本
+     */
     private String scratchpadBlock(List<Map<String, Object>> scratchpad) {
         if (scratchpad.isEmpty()) {
             return "暂无工具调用记录。";
@@ -250,6 +311,12 @@ public class LlmWorkspaceAgentService {
         return String.join("\n\n", blocks);
     }
 
+    /**
+     * 返回工具描述文本。
+     *
+     * @param tool 工具名称
+     * @return 工具说明
+     */
     private String toolDescription(String tool) {
         return switch (tool) {
             case "creator_briefing" -> "根据领域、方向、想法和分区，抓取热点榜、分区样本、同类样本原始数据。输入: {field, direction, idea, partition}";
@@ -259,6 +326,11 @@ public class LlmWorkspaceAgentService {
         };
     }
 
+    /**
+     * 注册可供 Agent 调用的工具集合。
+     *
+     * @return 工具名称到实现的映射
+     */
     private Map<String, Function<Map<String, Object>, Map<String, Object>>> registeredTools() {
         Map<String, Function<Map<String, Object>, Map<String, Object>>> tools = new LinkedHashMap<>();
         tools.put("creator_briefing", this::buildCreatorBriefing);
@@ -267,6 +339,12 @@ public class LlmWorkspaceAgentService {
         return tools;
     }
 
+    /**
+     * 构建创作者侧简报数据。
+     *
+     * @param payload 用户输入载荷
+     * @return 创作者简报
+     */
     private Map<String, Object> buildCreatorBriefing(Map<String, Object> payload) {
         String partition = properties.normalizePartition(stringValue(payload.getOrDefault("partition", "knowledge")));
         Map<String, Object> result = new LinkedHashMap<>();
@@ -281,6 +359,12 @@ public class LlmWorkspaceAgentService {
         return result;
     }
 
+    /**
+     * 构建视频侧简报数据。
+     *
+     * @param url 视频链接
+     * @return 视频简报
+     */
     private Map<String, Object> buildVideoBriefing(String url) {
         String bvid = videoResolverService.extractBvid(url);
         Map<String, Object> info = videoResolverService.fetchVideoInfo(url, bvid);
@@ -304,6 +388,12 @@ public class LlmWorkspaceAgentService {
         );
     }
 
+    /**
+     * 构建热点榜快照。
+     *
+     * @param partition 分区名称
+     * @return 热点榜快照
+     */
     private Map<String, Object> buildHotBoardSnapshot(String partition) {
         Map<String, Object> marketSnapshot = buildMarketSnapshot(partition, List.of());
         return Map.of(
@@ -314,6 +404,13 @@ public class LlmWorkspaceAgentService {
         );
     }
 
+    /**
+     * 构建指定分区的市场快照。
+     *
+     * @param partitionName 分区名称
+     * @param upIds 对标 UP 主 ID 列表
+     * @return 市场快照
+     */
     private Map<String, Object> buildMarketSnapshot(String partitionName, List<Integer> upIds) {
         String normalized = properties.normalizePartition(partitionName);
         return Map.of(
@@ -326,6 +423,12 @@ public class LlmWorkspaceAgentService {
         );
     }
 
+    /**
+     * 将原始对象读取为整数列表。
+     *
+     * @param raw 原始值
+     * @return 整数列表
+     */
     private List<Integer> readIntegerList(Object raw) {
         if (!(raw instanceof List<?> list)) {
             return List.of();
@@ -337,6 +440,14 @@ public class LlmWorkspaceAgentService {
         return result;
     }
 
+    /**
+     * 记录一次工具调用观察结果。
+     *
+     * @param action 工具名称
+     * @param actionInput 工具输入
+     * @param observation 工具输出
+     * @return 结构化观察记录
+     */
     private Map<String, Object> toolObservation(String action, Map<String, Object> actionInput, Map<String, Object> observation) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("action", action);
@@ -345,10 +456,22 @@ public class LlmWorkspaceAgentService {
         return payload;
     }
 
+    /**
+     * 构建校验错误观察记录。
+     *
+     * @param message 错误消息
+     * @return 错误记录
+     */
     private Map<String, Object> validationError(String message) {
         return toolObservation("validation_error", Map.of(), Map.of("error", message));
     }
 
+    /**
+     * 将对象安全转换为 Map。
+     *
+     * @param raw 原始值
+     * @return 映射结果
+     */
     private Map<String, Object> map(Object raw) {
         if (raw instanceof Map<?, ?> source) {
             Map<String, Object> result = new LinkedHashMap<>();
@@ -358,6 +481,12 @@ public class LlmWorkspaceAgentService {
         return new LinkedHashMap<>();
     }
 
+    /**
+     * 将对象安全转换为字符串。
+     *
+     * @param value 原始值
+     * @return 去空白后的字符串
+     */
     private String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
     }

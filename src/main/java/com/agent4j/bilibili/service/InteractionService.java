@@ -14,12 +14,26 @@ public class InteractionService {
     private final LlmClientService llmClientService;
     private final BilibiliHttpSupport httpSupport;
 
+    /**
+     * 创建互动运营服务。
+     *
+     * @param videoResolverService 视频解析服务
+     * @param llmClientService LLM 客户端服务
+     * @param httpSupport B 站请求支持组件
+     */
     public InteractionService(VideoResolverService videoResolverService, LlmClientService llmClientService, BilibiliHttpSupport httpSupport) {
         this.videoResolverService = videoResolverService;
         this.llmClientService = llmClientService;
         this.httpSupport = httpSupport;
     }
 
+    /**
+     * 分析评论并生成互动运营建议。
+     *
+     * @param bvId 目标视频 BV 号
+     * @param dryRun 是否仅演练
+     * @return 互动建议结果
+     */
     public OperationResult processVideoInteractions(String bvId, boolean dryRun) {
         List<InteractionAction> replies = new ArrayList<>();
         List<InteractionAction> deletions = new ArrayList<>();
@@ -56,6 +70,12 @@ public class InteractionService {
         return result;
     }
 
+    /**
+     * 获取目标视频的评论数据。
+     *
+     * @param bvId 目标视频 BV 号
+     * @return 评论列表
+     */
     private List<Map<String, Object>> fetchComments(String bvId) {
         try {
             Map<String, Object> info = videoResolverService.fetchVideoInfo("https://www.bilibili.com/video/" + bvId, bvId);
@@ -69,6 +89,12 @@ public class InteractionService {
         }
     }
 
+    /**
+     * 解析评论接口返回结果。
+     *
+     * @param payload 评论接口载荷
+     * @return 结构化评论列表
+     */
     private List<Map<String, Object>> parseComments(com.fasterxml.jackson.databind.JsonNode payload) {
         List<Map<String, Object>> result = new ArrayList<>();
         for (com.fasterxml.jackson.databind.JsonNode reply : payload.path("data").path("replies")) {
@@ -84,6 +110,12 @@ public class InteractionService {
         return result.isEmpty() ? demoComments() : result;
     }
 
+    /**
+     * 判断评论是否属于垃圾内容。
+     *
+     * @param text 评论文本
+     * @return 是否命中垃圾词规则
+     */
     private boolean isSpam(String text) {
         String lower = text == null ? "" : text.toLowerCase();
         return List.of("兼职", "返利", "私聊", "vx", "微信", "广告", "废物", "引战")
@@ -91,6 +123,12 @@ public class InteractionService {
                 .anyMatch(lower::contains);
     }
 
+    /**
+     * 根据评论内容生成简短回复。
+     *
+     * @param text 评论文本
+     * @return 回复文案
+     */
     private String generateReply(String text) {
         String fallback;
         if (text.contains("谢谢") || text.contains("支持") || text.contains("喜欢")) {
@@ -107,6 +145,11 @@ public class InteractionService {
         );
     }
 
+    /**
+     * 返回演示评论数据。
+     *
+     * @return 演示评论列表
+     */
     private List<Map<String, Object>> demoComments() {
         return List.of(
                 Map.of("rpid", "demo-1", "content", Map.of("message", "这个方法挺有用，谢谢"), "member", Map.of("uname", "粉丝A", "mid", 101)),
@@ -115,6 +158,12 @@ public class InteractionService {
         );
     }
 
+    /**
+     * 将对象安全转换为 Map。
+     *
+     * @param value 原始值
+     * @return 转换后的映射结果
+     */
     private Map<String, Object> map(Object value) {
         if (value instanceof Map<?, ?> source) {
             java.util.LinkedHashMap<String, Object> result = new java.util.LinkedHashMap<>();
