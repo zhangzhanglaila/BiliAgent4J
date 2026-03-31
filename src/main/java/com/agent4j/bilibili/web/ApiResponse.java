@@ -40,6 +40,17 @@ public class ApiResponse<T> {
     }
 
     /**
+     * 创建包含附加数据的失败响应。
+     *
+     * @param error 错误信息
+     * @param data 附加数据
+     * @return 包含错误描述和附加数据的失败结果
+     */
+    public static <T> ApiResponse<T> failure(String error, T data) {
+        return new ApiResponse<>(false, data, error);
+    }
+
+    /**
      * 判断当前响应是否成功。
      *
      * @return 是否成功

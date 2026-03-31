@@ -19,8 +19,8 @@ import org.springframework.stereotype.Service;
 public class LlmClientService {
 
     private final AppProperties properties;
+    private final RuntimeLlmConfigService runtimeLlmConfigService;
     private final ObjectMapper objectMapper;
-    private ChatModel chatModel;
 
     /**
      * 创建 LLM 客户端服务。
@@ -28,8 +28,13 @@ public class LlmClientService {
      * @param properties 系统配置
      * @param objectMapper JSON 映射器
      */
-    public LlmClientService(AppProperties properties, ObjectMapper objectMapper) {
+    public LlmClientService(
+            AppProperties properties,
+            RuntimeLlmConfigService runtimeLlmConfigService,
+            ObjectMapper objectMapper
+    ) {
         this.properties = properties;
+        this.runtimeLlmConfigService = runtimeLlmConfigService;
         this.objectMapper = objectMapper;
     }
 
@@ -39,7 +44,7 @@ public class LlmClientService {
      * @return 是否已启用 LLM
      */
     public boolean available() {
-        return properties.llmEnabled();
+        return runtimeLlmConfigService.runtimeLlmEnabled();
     }
 
     /**
@@ -47,7 +52,7 @@ public class LlmClientService {
      */
     public void requireAvailable() {
         if (!available()) {
-            throw new IllegalStateException("LLM unavailable: configure LLM_API_KEY first.");
+            throw new IllegalStateException("LLM unavailable: configure runtime LLM settings first.");
         }
     }
 
@@ -114,6 +119,10 @@ public class LlmClientService {
      */
     public String invokeTextRequired(String systemPrompt, String userPrompt) {
         requireAvailable();
+        RuntimeLlmConfigService.RuntimeLlmConfig config = runtimeLlmConfigService.getActiveRuntimeLlmConfig();
+        if (config == null) {
+            throw new IllegalStateException("LLM unavailable: runtime configuration is missing.");
+        }
         int attempts = Math.max(1, properties.getLlmMaxRetries() + 1);
         RuntimeException lastError = null;
         for (int attempt = 1; attempt <= attempts; attempt++) {
@@ -122,7 +131,7 @@ public class LlmClientService {
                         SystemMessage.from(systemPrompt),
                         UserMessage.from(userPrompt)
                 );
-                ChatResponse response = chatModel().chat(
+                ChatResponse response = chatModel(config).chat(
                         ChatRequest.builder()
                                 .messages(messages)
                                 .temperature(0.7)
@@ -157,7 +166,7 @@ public class LlmClientService {
             case "bad_gateway", "gateway_timeout" -> "上游 LLM 网关暂时异常（502/504）。";
             case "timeout" -> "LLM 请求超时，请稍后重试。";
             case "rate_limit" -> "上游 LLM 当前限流，请稍后重试。";
-            case "auth" -> "LLM API Key 无效或鉴权失败，请检查 .env 配置。";
+            case "auth" -> "LLM API Key 无效或鉴权失败，请检查当前运行时配置。";
             case "quota" -> "LLM 服务当前不可用，可能是额度或权限限制。";
             default -> throwable == null ? "未知 LLM 错误" : throwable.getMessage();
         };
@@ -190,22 +199,37 @@ public class LlmClientService {
     }
 
     /**
-     * 延迟初始化并返回聊天模型。
+     * 判断当前异常是否应该引导前端拉起运行时重配表单。
+     *
+     * @param throwable 异常对象
+     * @return 是否建议重配
+     */
+    public boolean shouldPromptRuntimeConfig(Throwable throwable) {
+        String category = classifyLlmError(throwable);
+        if (!"unknown".equals(category)) {
+            return true;
+        }
+        String text = throwable == null ? "" : String.valueOf(throwable.getMessage()).toLowerCase();
+        return text.contains("llm")
+                || text.contains("api key")
+                || text.contains("runtime configuration")
+                || text.contains("provider")
+                || text.contains("quota");
+    }
+
+    /**
+     * 基于当前配置创建聊天模型。
      *
      * @return LangChain4j 聊天模型
      */
-    private ChatModel chatModel() {
-        if (chatModel == null) {
-            // Build the LangChain4j model lazily so rules mode can run without any LLM config.
-            chatModel = OpenAiChatModel.builder()
-                    .apiKey(properties.getLlmApiKey())
-                    .baseUrl(properties.getLlmBaseUrl())
-                    .modelName(properties.getLlmModel())
-                    .timeout(Duration.ofSeconds(properties.getLlmTimeoutSeconds()))
-                    .maxRetries(0)
-                    .build();
-        }
-        return chatModel;
+    private ChatModel chatModel(RuntimeLlmConfigService.RuntimeLlmConfig config) {
+        return OpenAiChatModel.builder()
+                .apiKey(config.apiKey())
+                .baseUrl(config.baseUrl())
+                .modelName(config.model())
+                .timeout(Duration.ofSeconds(properties.getLlmTimeoutSeconds()))
+                .maxRetries(0)
+                .build();
     }
 
     /**

@@ -28,6 +28,7 @@ public class WorkspaceService {
     private final OptimizationService optimizationService;
     private final VideoResolverService videoResolverService;
     private final RuntimeInfoService runtimeInfoService;
+    private final RuntimeLlmConfigService runtimeLlmConfigService;
     private final ReferenceVideoService referenceVideoService;
     private final LlmClientService llmClientService;
     private final LlmWorkspaceAgentService llmWorkspaceAgentService;
@@ -42,6 +43,7 @@ public class WorkspaceService {
      * @param optimizationService 优化服务
      * @param videoResolverService 视频解析服务
      * @param runtimeInfoService 运行信息服务
+     * @param runtimeLlmConfigService 运行时 LLM 配置服务
      * @param referenceVideoService 参考视频服务
      * @param llmClientService LLM 客户端服务
      * @param llmWorkspaceAgentService 工作台 Agent 服务
@@ -55,6 +57,7 @@ public class WorkspaceService {
             OptimizationService optimizationService,
             VideoResolverService videoResolverService,
             RuntimeInfoService runtimeInfoService,
+            RuntimeLlmConfigService runtimeLlmConfigService,
             ReferenceVideoService referenceVideoService,
             LlmClientService llmClientService,
             LlmWorkspaceAgentService llmWorkspaceAgentService
@@ -67,6 +70,7 @@ public class WorkspaceService {
         this.optimizationService = optimizationService;
         this.videoResolverService = videoResolverService;
         this.runtimeInfoService = runtimeInfoService;
+        this.runtimeLlmConfigService = runtimeLlmConfigService;
         this.referenceVideoService = referenceVideoService;
         this.llmClientService = llmClientService;
         this.llmWorkspaceAgentService = llmWorkspaceAgentService;
@@ -78,6 +82,44 @@ public class WorkspaceService {
      */
     public Map<String, Object> runtimeInfo() {
         return runtimeInfoService.buildRuntimePayload();
+    }
+
+    /**
+     * 切换运行时模式开关。
+     *
+     * @param enabled 是否启用 LLM Agent
+     * @return 最新运行时信息
+     */
+    public Map<String, Object> setRuntimeMode(boolean enabled) {
+        if (!enabled) {
+            runtimeLlmConfigService.setRuntimeLlmEnabled(false);
+            return runtimeInfoService.buildRuntimePayload();
+        }
+
+        if (!runtimeLlmConfigService.hasSavedRuntimeLlmConfig()) {
+            runtimeLlmConfigService.setRuntimeLlmEnabled(false);
+            Map<String, Object> payload = new LinkedHashMap<>(runtimeInfoService.buildRuntimePayload());
+            payload.put("requires_config", true);
+            return payload;
+        }
+
+        runtimeLlmConfigService.setRuntimeLlmEnabled(true);
+        Map<String, Object> payload = new LinkedHashMap<>(runtimeInfoService.buildRuntimePayload());
+        payload.put("requires_config", false);
+        return payload;
+    }
+
+    /**
+     * 保存运行时 LLM 配置并立即启用。
+     *
+     * @param data 配置请求体
+     * @return 最新运行时信息
+     */
+    public Map<String, Object> saveRuntimeLlmConfig(Map<String, Object> data) {
+        runtimeLlmConfigService.saveRuntimeLlmConfig(data);
+        Map<String, Object> payload = new LinkedHashMap<>(runtimeInfoService.buildRuntimePayload());
+        payload.put("requires_config", false);
+        return payload;
     }
 
     /**
@@ -161,7 +203,7 @@ public class WorkspaceService {
      * @return 选题、文案和创作者画像结果
      */
     public Map<String, Object> moduleCreate(Map<String, Object> data) {
-        if (properties.llmEnabled()) {
+        if (llmClientService.available()) {
             try {
                 return llmWorkspaceAgentService.runModuleCreate(data);
             } catch (Exception exception) {
@@ -212,7 +254,7 @@ public class WorkspaceService {
                 readIntegerList(resolved.get("up_ids"))
         );
 
-        if (properties.llmEnabled()) {
+        if (llmClientService.available()) {
             try {
                 return llmWorkspaceAgentService.runModuleAnalyze(data, resolved, marketSnapshot);
             } catch (Exception exception) {
@@ -269,7 +311,7 @@ public class WorkspaceService {
      * @return 助手回复、建议动作和参考链接
      */
     public Map<String, Object> chat(Map<String, Object> data) {
-        if (!properties.llmEnabled()) {
+        if (!llmClientService.available()) {
             throw new IllegalStateException("当前是无 Key 规则模式，智能对话助手仅在配置 LLM_API_KEY 后可用。");
         }
         try {

@@ -1,9 +1,9 @@
 package com.agent4j.bilibili.controller;
 
 import com.agent4j.bilibili.service.LlmClientService;
+import com.agent4j.bilibili.service.RuntimeInfoService;
 import com.agent4j.bilibili.service.WorkspaceService;
 import com.agent4j.bilibili.web.ApiResponse;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -20,15 +20,22 @@ public class ApiController {
 
     private final WorkspaceService workspaceService;
     private final LlmClientService llmClientService;
+    private final RuntimeInfoService runtimeInfoService;
 
     /**
      * 创建 API 控制器并注入依赖
      * @param workspaceService 工作台服务
      * @param llmClientService LLM 客户端服务
+     * @param runtimeInfoService 运行时信息服务
      */
-    public ApiController(WorkspaceService workspaceService, LlmClientService llmClientService) {
+    public ApiController(
+            WorkspaceService workspaceService,
+            LlmClientService llmClientService,
+            RuntimeInfoService runtimeInfoService
+    ) {
         this.workspaceService = workspaceService;
         this.llmClientService = llmClientService;
+        this.runtimeInfoService = runtimeInfoService;
     }
 
     /**
@@ -38,6 +45,28 @@ public class ApiController {
     @GetMapping("/runtime-info")
     public ApiResponse<Map<String, Object>> runtimeInfo() {
         return ApiResponse.success(workspaceService.runtimeInfo());
+    }
+
+    /**
+     * 切换运行时模式开关。
+     *
+     * @param body 请求体
+     * @return 最新运行时信息
+     */
+    @PostMapping("/runtime-mode")
+    public ApiResponse<Map<String, Object>> runtimeMode(@RequestBody Map<String, Object> body) {
+        return ApiResponse.success(workspaceService.setRuntimeMode(readBoolean(body.get("enabled"))));
+    }
+
+    /**
+     * 保存运行时 LLM 配置。
+     *
+     * @param body 请求体
+     * @return 最新运行时信息
+     */
+    @PostMapping("/runtime-llm-config")
+    public ApiResponse<Map<String, Object>> runtimeLlmConfig(@RequestBody Map<String, Object> body) {
+        return ApiResponse.success(workspaceService.saveRuntimeLlmConfig(body));
     }
 
     /**
@@ -172,8 +201,11 @@ public class ApiController {
         if (status == 500 && (message.contains("LLM") || message.contains("api key") || message.contains("quota"))) {
             message = llmClientService.formatLlmError(exception);
         }
+        Map<String, Object> data = llmClientService.shouldPromptRuntimeConfig(exception)
+                ? runtimeInfoService.buildLlmRuntimeReconfigureData(message)
+                : null;
         return ResponseEntity.status(status == 500 ? HttpStatus.BAD_REQUEST : HttpStatus.valueOf(status))
-                .body(ApiResponse.failure(message));
+                .body(data == null ? ApiResponse.failure(message) : ApiResponse.failure(message, data));
     }
 
     /**
@@ -192,5 +224,18 @@ public class ApiController {
                 return 0;
             }
         }).filter(value -> value > 0).toList();
+    }
+
+    /**
+     * 读取布尔值参数。
+     *
+     * @param raw 原始值
+     * @return 布尔结果
+     */
+    private boolean readBoolean(Object raw) {
+        if (raw instanceof Boolean value) {
+            return value;
+        }
+        return "true".equalsIgnoreCase(String.valueOf(raw).trim());
     }
 }

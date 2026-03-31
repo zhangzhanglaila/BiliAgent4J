@@ -1,5 +1,6 @@
 const MIC_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a3 3 0 0 1 3 3v6a3 3 0 1 1-6 0V6a3 3 0 0 1 3-3z"></path><path d="M19 11a7 7 0 0 1-14 0"></path><path d="M12 18v3"></path><path d="M8 21h8"></path></svg>';
 const SEND_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2 11 13"></path><path d="m22 2-7 20-4-9-9-4 20-7Z"></path></svg>';
+const INITIAL_RUNTIME = window.__INITIAL_RUNTIME__ || {};
 
 const state = {
   videoResolved: null,
@@ -15,15 +16,26 @@ const state = {
   chatPending: false,
   chatTyping: false,
   chatHistory: [],
+  pendingRuntimeRetryAction: null,
   runtime: {
-    mode: 'rules',
-    llmEnabled: false,
-    chatAvailable: false,
-    modeLabel: '规则模式',
-    modeTitle: '当前运行中：规则模式',
-    modeDescription: '',
-    tokenPolicy: '',
-    switchHint: '',
+    mode: INITIAL_RUNTIME.mode || 'rules',
+    llmEnabled: Boolean(INITIAL_RUNTIME.llm_enabled),
+    chatAvailable: Boolean(INITIAL_RUNTIME.chat_available),
+    switchChecked: Boolean(INITIAL_RUNTIME.switch_checked),
+    hasSavedConfig: Boolean(INITIAL_RUNTIME.has_saved_llm_config),
+    savedConfigSource: INITIAL_RUNTIME.saved_config_source || '',
+    savedProvider: INITIAL_RUNTIME.saved_provider || '',
+    savedModel: INITIAL_RUNTIME.saved_model || '',
+    savedBaseUrl: INITIAL_RUNTIME.saved_base_url || '',
+    savedApiKeyMasked: INITIAL_RUNTIME.saved_api_key_masked || '',
+    requiresConfig: Boolean(INITIAL_RUNTIME.requires_config),
+    modeLabel: INITIAL_RUNTIME.mode_label || '无 Key 逻辑模式',
+    modeTitle: INITIAL_RUNTIME.mode_title || '当前运行中：无 Key 逻辑模式',
+    modeDescription: INITIAL_RUNTIME.mode_description || '',
+    tokenPolicy: INITIAL_RUNTIME.token_policy || '',
+    switchHint: INITIAL_RUNTIME.switch_hint || '',
+    forceConfigPrompt: false,
+    runtimeErrorMessage: '',
   },
   recognition: null,
   isListening: false,
@@ -505,11 +517,15 @@ async function requestJson(url, payload) {
       body: JSON.stringify(payload),
     });
     const data = await res.json();
-    if (!res.ok || !data.success) throw new Error(data.error || '请求失败');
+    if (!res.ok || !data.success) {
+      const error = new Error(data.error || '请求失败');
+      error.payload = data.data || {};
+      throw error;
+    }
     return data.data;
   } catch (error) {
     if (error instanceof Error && /Failed to fetch/i.test(error.message)) {
-      throw new Error('接口请求失败，请检查 Flask 服务是否在运行，或后端是否正在重启。');
+      throw new Error('接口请求失败，请检查后端服务是否在运行，或服务是否正在重启。');
     }
     throw error;
   }
@@ -528,7 +544,7 @@ async function requestGetJson(url) {
     return data.data;
   } catch (error) {
     if (error instanceof Error && /Failed to fetch/i.test(error.message)) {
-      throw new Error('接口请求失败，请检查 Flask 服务是否在运行。');
+      throw new Error('接口请求失败，请检查后端服务是否在运行。');
     }
     throw error;
   }
@@ -571,26 +587,6 @@ function tags(items = []) {
   return list.length
     ? `<div class="tag-list">${list.map(item => `<span class="tag">${escapeHtml(item)}</span>`).join('')}</div>`
     : '<p class="section-note">暂无标签</p>';
-}
-
-/**
- * 渲染基础加载卡片
- * @param {string} title 标题
- * @param {*} desc 描述
- * @param {Array} steps 步骤列表
- * @returns {string} 加载卡片 HTML
- */
-function loadingCard(title, desc, steps = []) {
-  return `
-    <section class="loading-card">
-      <div class="block-title">
-        <div><h4>${escapeHtml(title)}</h4><p>${escapeHtml(desc)}</p></div>
-        <span class="type-badge">处理中</span>
-      </div>
-      <div class="bili-progress"><div class="bili-progress__bar bili-progress__bar--indeterminate"></div></div>
-      ${steps.length ? `<div class="bili-progress__steps">${steps.map((step, i) => `<div class="progress-step ${i === 0 ? 'is-active' : ''}"><span class="progress-step__dot"></span><span>${escapeHtml(step)}</span></div>`).join('')}</div>` : ''}
-    </section>
-  `;
 }
 
 /**
@@ -790,52 +786,6 @@ function creatorResult(data) {
 }
 
 /**
- * 渲染视频解析后的预览信息
- * @param {Object} data 视频数据
- * @param {Object} options 预览配置
- * @returns {string} 视频预览 HTML
- */
-function videoPreview(data, options = {}) {
-  const resolved = data || {};
-  const stats = resolved.stats || {};
-  const loading = Boolean(options.loading);
-  const error = options.error || '';
-  const title = loading ? '正在自动解析视频信息' : error ? '视频链接解析失败' : data ? '已自动解析当前视频信息' : '当前视频信息预览';
-  const note = loading
-    ? '系统正在根据你输入的 B 站视频链接提取标题、分区、UP 主和互动数据。'
-    : error
-      ? error
-      : data
-        ? '这些字段来自当前视频链接的自动解析结果，点击下方按钮会基于这些真实信息继续分析。'
-        : '粘贴视频链接后，这里会自动显示标题、类型、播放、点赞、投币、收藏、评论和分享。';
-  const cover = coverUrl(resolved.cover);
-  return `
-    <section class="copy-block" id="videoPreviewSection">
-      <div class="block-title">
-        <div><h4>${escapeHtml(title)}</h4><p>${escapeHtml(note)}</p></div>
-        <span class="type-badge ${error ? 'type-badge--danger' : ''}">${loading ? '自动解析中' : data ? '已解析' : '待解析'}</span>
-      </div>
-      ${loading ? '<div class="bili-progress"><div class="bili-progress__bar bili-progress__bar--indeterminate"></div></div>' : ''}
-      ${cover ? `<div class="video-cover-strip"><div class="video-cover-strip__thumb">${renderCoverMedia(cover, resolved.title || '视频封面', 'strip')}</div><div class="video-cover-strip__body"><strong>${escapeHtml(resolved.title || '当前视频')}</strong><span>${escapeHtml(resolved.up_name || '自动解析结果')}</span></div></div>` : ''}
-      <div class="summary-strip">
-        ${previewCard('视频标题', resolved.title || '', '根据视频链接自动解析当前视频标题')}
-        ${previewCard('视频类型', resolved.partition_label || resolved.partition || '', '根据视频链接自动解析分区和视频类型')}
-        ${previewCard('UP 主', resolved.up_name || '', '根据视频链接自动解析对应 UP 主')}
-        ${previewCard('BV 号', resolved.bv_id || '', '根据视频链接自动解析对应 BV 号')}
-      </div>
-      <div class="summary-strip summary-strip--metrics">
-        ${previewCard('播放量', data ? num(stats.view) : '', '根据视频链接自动解析公开播放量')}
-        ${previewCard('点赞量', data ? num(stats.like) : '', '根据视频链接自动解析公开点赞量')}
-        ${previewCard('投币量', data ? num(stats.coin) : '', '根据视频链接自动解析公开投币量')}
-        ${previewCard('收藏量', data ? num(stats.favorite) : '', '根据视频链接自动解析公开收藏量')}
-        ${previewCard('评论量', data ? num(stats.reply) : '', '根据视频链接自动解析公开评论量')}
-        ${previewCard('分享量', data ? num(stats.share) : '', '根据视频链接自动解析公开分享量')}
-      </div>
-    </section>
-  `;
-}
-
-/**
  * 渲染视频核心指标
  * @param {Object} resolved 已解析视频数据
  * @returns {string} 指标区块 HTML
@@ -970,74 +920,116 @@ function videoResult(data) {
 function assistantEmptyState() {
   return `
     <div class="empty-state">
-      <h4>${state.runtime.chatAvailable ? '还没有对话内容' : '当前为规则模式'}</h4>
-      <p>${state.runtime.chatAvailable ? '你可以直接像聊天一样提问，助手会结合当前页面上下文作答。' : '配置 LLM_API_KEY 后，右侧对话助手会切到真正的 LLM Agent 链路。'}</p>
+      <h4>${state.runtime.chatAvailable ? '还没有对话内容' : '当前为无 Key 逻辑模式'}</h4>
+      <p>${state.runtime.chatAvailable ? '你可以直接像聊天一样提问，助手会结合当前页面上下文作答。' : '请先在上方运行模式区域开启 LLM Agent 模式，右侧智能助手才会真正进入 Agent 链路。'}</p>
     </div>
   `;
 }
 
 /**
- * 渲染助手等待气泡
- * @returns {string} 等待气泡 HTML
+ * 把后端返回的运行模式信息同步到前端状态对象里。
+ * @param {Object} data 后端运行时信息
  */
-function assistantPendingBubble() {
-  return `
-    <article class="chat-row chat-row--assistant">
-      <div class="chat-bubble chat-bubble--assistant chat-bubble--pending">
-        <div class="chat-bubble__head"><strong class="chat-bubble__name">智能助手</strong><span class="meta-line">正在思考</span></div>
-        ${loadingCard('Agent 正在思考', '正在结合当前页面输入、工具结果和上下文组织回答。', ['理解问题', '调用工具', '组织回答'])}
-      </div>
-    </article>
-  `;
+function applyRuntimePayload(data = {}) {
+  state.runtime = {
+    ...state.runtime,
+    mode: data.mode || 'rules',
+    llmEnabled: Boolean(data.llm_enabled),
+    chatAvailable: Boolean(data.chat_available),
+    switchChecked: Boolean(data.switch_checked),
+    hasSavedConfig: Boolean(data.has_saved_llm_config),
+    savedConfigSource: data.saved_config_source || '',
+    savedProvider: data.saved_provider || '',
+    savedModel: data.saved_model || '',
+    savedBaseUrl: data.saved_base_url || '',
+    savedApiKeyMasked: data.saved_api_key_masked || '',
+    requiresConfig: Boolean(data.requires_config),
+    modeLabel: data.mode_label || '无 Key 逻辑模式',
+    modeTitle: data.mode_title || '当前运行中：无 Key 逻辑模式',
+    modeDescription: data.mode_description || '',
+    tokenPolicy: data.token_policy || '',
+    switchHint: data.switch_hint || '',
+    forceConfigPrompt: Boolean(data.force_config_prompt),
+    runtimeErrorMessage: data.runtime_error_message || '',
+  };
 }
 
 /**
- * 渲染智能助手对话面板。
- * 该方法会根据聊天记录、等待状态和参考链接，统一生成当前对话区的显示结果。
- * 这样界面层只需要传入必要数据，就可以得到结构一致、便于直接插入页面的渲染结果。
+ * 控制运行模式配置表单显示状态。
+ * @param {boolean} visible 是否显示
  */
-function renderAssistant() {
-  const box = $('#assistantResult');
-  if (!box) return;
-  if (!state.chatHistory.length && !state.chatPending) {
-    box.innerHTML = assistantEmptyState();
-    return;
-  }
-  box.innerHTML = `
-    <div class="assistant-thread">
-      ${state.chatHistory.map(item => `
-        <article class="chat-row chat-row--${escapeHtml(item.role)}">
-          <div class="chat-bubble chat-bubble--${escapeHtml(item.role)} ${item.error ? 'chat-bubble--error' : ''}">
-            <div class="chat-bubble__head">
-              <strong class="chat-bubble__name">${item.role === 'assistant' ? '智能助手' : '你'}</strong>
-              ${item.role === 'assistant' ? `<button class="copy-btn" data-copy="${escapeHtml(item.content || '')}" data-copy-label="回答">复制</button>` : ''}
-            </div>
-            <div class="rich-text">${rich(item.content || '')}</div>
-            ${item.actions?.length ? `<div class="assistant-actions">${assistantActionButtons(item.actions)}</div>` : ''}
-            ${item.references?.length ? `<div class="chat-links"><div class="meta-line">可直接打开的参考视频</div>${referenceGrid(item.references, true)}</div>` : ''}
-          </div>
-        </article>
-      `).join('')}
-      ${state.chatPending ? assistantPendingBubble() : ''}
-    </div>
-  `;
-  bindCopyButtons(box);
-  box.querySelectorAll('[data-assistant-action]').forEach(button => {
-    if (button.dataset.boundClick === '1') return;
-    button.dataset.boundClick = '1';
-    button.addEventListener('click', () => {
-      const prompt = button.dataset.assistantAction || '';
-      if (!prompt || state.chatPending || state.chatTyping) return;
-      sendAssistantMessage(prompt);
-    });
-  });
-  requestAnimationFrame(() => {
-    box.scrollTop = box.scrollHeight;
-  });
+function setRuntimeConfigFormVisible(visible) {
+  const form = $('#runtimeConfigForm');
+  if (!form) return;
+  form.hidden = !visible;
+  form.classList.toggle('is-visible', Boolean(visible));
 }
 
 /**
- * 将运行时信息同步到界面
+ * 让运行模式开关做一次抖动提示。
+ */
+function shakeRuntimeModeToggle() {
+  const toggle = $('#runtimeModeToggle');
+  if (!toggle) return;
+  toggle.classList.remove('is-shaking');
+  void toggle.offsetWidth;
+  toggle.classList.add('is-shaking');
+  window.setTimeout(() => toggle.classList.remove('is-shaking'), 450);
+}
+
+/**
+ * 让运行模式配置表单做一次抖动提示。
+ */
+function shakeRuntimeConfigForm() {
+  const form = $('#runtimeConfigForm');
+  if (!form) return;
+  form.classList.remove('is-shaking');
+  void form.offsetWidth;
+  form.classList.add('is-shaking');
+  window.setTimeout(() => form.classList.remove('is-shaking'), 450);
+}
+
+/**
+ * 判断当前错误是否应该直接引导用户重新填写 LLM 配置。
+ * @param {*} error 异常对象
+ * @returns {boolean} 是否需要重配
+ */
+function shouldPromptRuntimeConfig(error) {
+  const message = String(error?.message || error || '');
+  if (error?.payload?.show_runtime_config) return true;
+  return /connection error|api key|鉴权|认证|provider|quota|rate limit|llm/i.test(message);
+}
+
+/**
+ * 在 LLM 配置不可用时拉起配置表单，并记录待重试动作。
+ * @param {*} error 异常对象
+ * @param {*} retryAction 重试动作
+ */
+function promptRuntimeConfigFromError(error, retryAction = null) {
+  const payload = error?.payload || {};
+  if (payload.runtime_payload) applyRuntimePayload(payload.runtime_payload);
+  state.runtime.forceConfigPrompt = true;
+  state.runtime.runtimeErrorMessage = payload.reason || String(error?.message || '当前 LLM 配置不可用，请重新填写。');
+  state.pendingRuntimeRetryAction = typeof retryAction === 'function' ? retryAction : null;
+  updateRuntimeUi();
+  shakeRuntimeModeToggle();
+  shakeRuntimeConfigForm();
+  document.getElementById('runtimeModePanel')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  const focusTarget = state.runtime.savedBaseUrl ? $('#runtimeConfigKey') : ($('#runtimeConfigUrl') || $('#runtimeConfigKey'));
+  focusTarget?.focus();
+}
+
+/**
+ * 处理无 Key 逻辑模式下点击智能助手面板的提示逻辑。
+ */
+function handleAssistantLockedClick() {
+  shakeRuntimeModeToggle();
+  showToast('当前不可用', '请开启 LLM Agent 模式才能使用智能会话助手。', 'error');
+  document.getElementById('runtimeModePanel')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+/**
+ * 将运行时信息同步到界面。
  */
 function updateRuntimeUi() {
   $('#runtimeModeBadge').textContent = `运行模式：${state.runtime.modeLabel}`;
@@ -1045,51 +1037,133 @@ function updateRuntimeUi() {
   $('#runtimeModeDesc').textContent = state.runtime.modeDescription;
   $('#runtimeTokenBadge').textContent = state.runtime.tokenPolicy;
   $('#runtimeSwitchHint').textContent = state.runtime.switchHint;
+  $('#runtimeSwitchText').textContent = state.runtime.switchChecked ? 'LLM Agent 模式' : '无 Key 逻辑模式';
   $('#assistantModeTag').textContent = state.runtime.chatAvailable ? 'LLM Agent 已启用' : '仅 LLM 模式可用';
   $('#assistantPanelDesc').textContent = state.runtime.chatAvailable
-    ? '助手会在对话里自主调用选题、视频解析和热门样本等工具。'
-    : '当前未配置 LLM_API_KEY，右侧对话助手不会调用模型，也不会消耗 token。';
+    ? '助手会在对话里自主调用选题、视频解析、热门样本等工具。'
+    : '当前处于无 Key 逻辑模式，智能会话助手会被禁用，切到 LLM Agent 模式后才可使用。';
   $('#assistantHint').textContent = state.runtime.chatAvailable
     ? '助手会结合当前页面里的选题输入或视频链接一起理解你的问题。'
-    : '想启用对话助手，请在 .env 中配置 LLM_API_KEY、LLM_BASE_URL、LLM_MODEL 后重启服务。';
+    : '当前为无 Key 逻辑模式。开启上方开关后，助手才会进入真正的 LLM Agent 链路。';
+
+  const toggle = $('#runtimeModeToggle');
+  if (toggle) {
+    toggle.classList.toggle('is-on', state.runtime.switchChecked);
+    toggle.setAttribute('aria-pressed', state.runtime.switchChecked ? 'true' : 'false');
+  }
+
+  const savedConfigSummary = $('#runtimeConfigSummary');
+  if (savedConfigSummary) {
+    if (state.runtime.hasSavedConfig) {
+      const parts = [
+        state.runtime.savedProvider || '自定义 provider',
+        state.runtime.savedModel || '默认模型',
+        state.runtime.savedBaseUrl || '',
+      ].filter(Boolean);
+      const sourceText = state.runtime.savedConfigSource === 'env' ? '来自 .env' : '来自页面填写';
+      savedConfigSummary.textContent = `已保存配置：${parts.join(' / ')} · ${sourceText}`;
+    } else {
+      savedConfigSummary.textContent = '当前没有已保存的 LLM 配置';
+    }
+  }
+
+  if (!($('#runtimeConfigUrl').value || '').trim()) $('#runtimeConfigUrl').value = state.runtime.savedBaseUrl || '';
+  if (!($('#runtimeConfigProvider').value || '').trim()) $('#runtimeConfigProvider').value = state.runtime.savedProvider || '';
+  if (!($('#runtimeConfigModel').value || '').trim()) $('#runtimeConfigModel').value = state.runtime.savedModel || '';
+
+  const formVisible = Boolean(state.runtime.forceConfigPrompt || (state.runtime.requiresConfig && !state.runtime.chatAvailable));
+  setRuntimeConfigFormVisible(formVisible);
+  $('#runtimeConfigHint').textContent = state.runtime.runtimeErrorMessage
+    ? `当前 LLM 配置调用失败：${state.runtime.runtimeErrorMessage}。请改填可用的 URL、Key 和模型供应商后重试。`
+    : state.runtime.hasSavedConfig
+      ? '当前已经保存过一组配置，关闭开关后再次打开会直接复用。'
+      : '当前没有已保存配置，打开开关时需要先填写 URL、Key 和模型供应商。';
+
+  const assistantPanel = $('#assistantPanel');
+  const assistantOverlay = $('#assistantLockOverlay');
+  if (assistantPanel) assistantPanel.classList.toggle('is-disabled', !state.runtime.chatAvailable);
+  if (assistantOverlay) assistantOverlay.hidden = state.runtime.chatAvailable;
+
   const input = $('#assistantMessage');
-  input.disabled = !state.runtime.chatAvailable;
+  input.disabled = false;
   input.placeholder = state.runtime.chatAvailable
     ? '例如：帮我分析这个视频为什么没有起量；或者：我想做颜值向舞蹈账号，第一条视频该拍什么'
-    : '当前为规则模式。配置 LLM_API_KEY 后这里会启用对话。';
+    : '当前为无 Key 逻辑模式。开启上方 LLM Agent 开关后，这里才可真正发起智能会话。';
   updateAssistantButton();
   renderAssistant();
 }
 
 /**
- * 更新助手发送按钮状态
+ * 切换运行模式开关，并按是否已有配置决定直接生效还是展示配置表单。
+ * @returns {Promise<void>} 切换 Promise
  */
-function updateAssistantButton() {
-  const input = $('#assistantMessage');
-  const button = $('#assistantSendBtn');
-  const icon = $('#assistantActionIcon');
-  if (!input || !button || !icon) return;
-  button.disabled = !state.runtime.chatAvailable;
-  button.classList.toggle('is-listening', state.isListening);
-  icon.innerHTML = input.value.trim() ? SEND_ICON : MIC_ICON;
-  button.setAttribute('aria-label', input.value.trim() ? '发送消息' : '语音输入');
+async function toggleRuntimeMode() {
+  const nextEnabled = !state.runtime.switchChecked;
+  try {
+    const data = await requestJson('/api/runtime-mode', { enabled: nextEnabled });
+    applyRuntimePayload(data);
+    updateRuntimeUi();
+    if (data.requires_config) {
+      showToast('还缺配置', '当前没有已保存的 LLM 配置，请先填写 URL、Key 和模型供应商。', 'error');
+      setStatus('请先填写 LLM 配置', 'error');
+      $('#runtimeConfigUrl')?.focus();
+      return;
+    }
+    if (nextEnabled) {
+      showToast('已开启', '当前已经切到 LLM Agent 模式。');
+      setStatus('已切换到 LLM Agent 模式', 'success');
+    } else {
+      state.pendingRuntimeRetryAction = null;
+      showToast('已关闭', '当前已经切回无 Key 逻辑模式。');
+      setStatus('已切换到无 Key 逻辑模式', 'success');
+    }
+  } catch (error) {
+    shakeRuntimeModeToggle();
+    showToast('切换失败', error.message, 'error');
+  }
 }
 
 /**
- * 清空界面结果和会话状态
+ * 提交运行时 LLM 配置，并在保存成功后立即开启 LLM Agent 模式。
+ * @param {*} event 提交事件
+ * @returns {Promise<void>} 保存 Promise
  */
-function clearResults() {
-  state.videoResolved = null;
-  state.videoResolvedUrl = '';
-  state.videoResolveSeq += 1;
-  state.chatHistory = [];
-  state.chatPending = false;
-  if (state.videoResolveTimer) clearTimeout(state.videoResolveTimer);
-  $('#creatorResult').innerHTML = '<div class="empty-state"><h4>还没有生成结果</h4><p>输入领域、方向和想法后，点击“一键生成选题与文案”。</p></div>';
-  $('#videoResult').innerHTML = '<div class="empty-state"><h4>还没有分析结果</h4><p>输入视频链接后，点击“一键解析并分析视频”。</p></div>';
-  $('#videoPreview').innerHTML = videoPreview(null);
-  renderAssistant();
-  setStatus('已清空结果', 'success');
+async function submitRuntimeConfig(event) {
+  event.preventDefault();
+  const payload = {
+    base_url: ($('#runtimeConfigUrl').value || '').trim(),
+    api_key: ($('#runtimeConfigKey').value || '').trim(),
+    provider: ($('#runtimeConfigProvider').value || '').trim(),
+    model: ($('#runtimeConfigModel').value || '').trim(),
+  };
+  if (!payload.base_url || !payload.api_key || !payload.provider) {
+    showToast('缺少配置', '请完整填写 URL、Key 和模型供应商。', 'error');
+    return;
+  }
+
+  const submitButton = $('#runtimeConfigSubmitBtn');
+  if (submitButton) submitButton.disabled = true;
+  try {
+    const data = await requestJson('/api/runtime-llm-config', payload);
+    applyRuntimePayload(data);
+    state.runtime.forceConfigPrompt = false;
+    state.runtime.runtimeErrorMessage = '';
+    updateRuntimeUi();
+    $('#runtimeConfigKey').value = '';
+    showToast('配置已保存', '已保存当前 LLM 配置，并切到 LLM Agent 模式。');
+    setStatus('已切换到 LLM Agent 模式', 'success');
+    const retryAction = state.pendingRuntimeRetryAction;
+    state.pendingRuntimeRetryAction = null;
+    if (typeof retryAction === 'function') {
+      window.setTimeout(() => retryAction(), 160);
+    }
+  } catch (error) {
+    shakeRuntimeConfigForm();
+    showToast('保存失败', error.message, 'error');
+    setStatus('LLM 配置保存失败', 'error');
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
 }
 
 /**
@@ -1165,16 +1239,7 @@ function isResolvedForUrl(url) {
 async function loadRuntimeInfo() {
   try {
     const data = await requestGetJson('/api/runtime-info');
-    state.runtime = {
-      mode: data.mode || 'rules',
-      llmEnabled: Boolean(data.llm_enabled),
-      chatAvailable: Boolean(data.chat_available),
-      modeLabel: data.mode_label || '规则模式',
-      modeTitle: data.mode_title || '当前运行中：规则模式',
-      modeDescription: data.mode_description || '',
-      tokenPolicy: data.token_policy || '',
-      switchHint: data.switch_hint || '',
-    };
+    applyRuntimePayload(data);
     updateRuntimeUi();
   } catch (error) {
     showToast('模式读取失败', error.message || '请检查后端服务', 'error');
@@ -1362,74 +1427,6 @@ function setActiveModule(module, options = {}) {
 }
 
 /**
- * 提交创作模块请求并渲染结果
- * @returns {Promise<void>} 执行 Promise
- */
-async function runCreatorModule() {
-  const payload = {
-    field: ($('#creatorField').value || '').trim(),
-    direction: ($('#creatorDirection').value || '').trim(),
-    idea: ($('#creatorIdea').value || '').trim(),
-    partition: $('#creatorPartition').value || 'knowledge',
-    style: $('#creatorStyle').value || '干货',
-  };
-  if (!payload.field && !payload.direction && !payload.idea) {
-    showToast('缺少输入', '请至少输入领域、方向、想法中的一项。', 'error');
-    return;
-  }
-  setButtonLoading('creatorRunBtn', true);
-  setStatus('正在生成选题与文案', 'loading');
-  $('#creatorResult').innerHTML = loadingCard('正在生成选题与文案', '系统会先整理你的方向，再结合热门结构生成更自然的选题和文案。', ['整理方向', '分析热门结构', '生成选题', '生成文案']);
-  try {
-    const data = await requestJson('/api/module-create', payload);
-    $('#creatorResult').innerHTML = creatorResult(data);
-    bindCopyButtons($('#creatorResult'));
-    if (data.llm_warning) showToast('LLM 已回退', 'Agent 中枢失败，已自动回退到直接 LLM 生成。', 'error');
-    setStatus('选题与文案已生成', 'success');
-  } catch (error) {
-    $('#creatorResult').innerHTML = infoCard('生成失败', error.message, 'danger');
-    setStatus('选题与文案生成失败', 'error');
-    showToast('生成失败', error.message, 'error');
-  } finally {
-    setButtonLoading('creatorRunBtn', false);
-  }
-}
-
-/**
- * 提交分析模块请求并渲染结果
- * @returns {Promise<void>} 执行 Promise
- */
-async function runAnalyzeModule() {
-  const url = ($('#videoLink').value || '').trim();
-  if (!url) {
-    showToast('缺少链接', '请先输入 B 站视频链接。', 'error');
-    return;
-  }
-  setButtonLoading('videoAnalyzeBtn', true);
-  setStatus('正在分析视频', 'loading');
-  $('#videoResult').innerHTML = loadingCard('正在分析视频', '先校验当前视频信息，再判断它更像爆款还是播放偏低，并生成对应建议。', ['校验视频信息', '判断表现', '分析原因', '输出建议']);
-  try {
-    if (!isResolvedForUrl(url)) await resolveVideoLink(url, ++state.videoResolveSeq, { silent: true });
-    const data = await requestJson('/api/module-analyze', { url, resolved: state.videoResolved });
-    if (data.resolved) {
-      state.videoResolved = data.resolved;
-      state.videoResolvedUrl = url;
-      $('#videoPreview').innerHTML = videoPreview(data.resolved);
-    }
-    $('#videoResult').innerHTML = videoResult(data);
-    bindCopyButtons($('#videoResult'));
-    if (data.llm_warning) showToast('LLM 已回退', 'Agent 中枢失败，已自动回退到直接 LLM 分析。', 'error');
-    setStatus('视频分析已完成', 'success');
-  } catch (error) {
-    $('#videoResult').innerHTML = infoCard('分析失败', error.message, 'danger');
-    setStatus('视频分析失败', 'error');
-    showToast('分析失败', error.message, 'error');
-  } finally {
-    setButtonLoading('videoAnalyzeBtn', false);
-  }
-}
-
-/**
  * 收集当前页面的对话上下文
  * @returns {Object} 对话上下文
  */
@@ -1442,53 +1439,6 @@ function chatContext() {
     style: $('#creatorStyle').value || '干货',
     videoLink: ($('#videoLink').value || '').trim(),
   };
-}
-
-/**
- * 发送助手消息并处理回复展示
- * @param {*} forced 强制发送的内容
- * @returns {Promise<void>} 发送 Promise
- */
-async function sendAssistantMessage(forced = '') {
-  if (!state.runtime.chatAvailable) {
-    showToast('当前不可用', '请先配置 LLM_API_KEY 并重启服务。', 'error');
-    return;
-  }
-  const input = $('#assistantMessage');
-  const message = (forced || input.value || '').trim();
-  if (!message) {
-    toggleVoiceInput();
-    return;
-  }
-  state.chatHistory.push({ role: 'user', content: message });
-  state.chatPending = true;
-  input.value = '';
-  autosize(input);
-  updateAssistantButton();
-  renderAssistant();
-  setStatus('智能助手正在思考', 'loading');
-  try {
-    const data = await requestJson('/api/chat', {
-      message,
-      history: state.chatHistory.map(item => ({ role: item.role, content: item.content })),
-      context: chatContext(),
-    });
-    state.chatHistory.push({
-      role: 'assistant',
-      content: data.reply || '暂无回复',
-      actions: Array.isArray(data.suggested_next_actions) ? data.suggested_next_actions : [],
-      references: Array.isArray(data.reference_links) ? data.reference_links : [],
-    });
-    setStatus('智能助手已回复', 'success');
-  } catch (error) {
-    state.chatHistory.push({ role: 'assistant', content: `请求失败：${error.message}`, error: true });
-    setStatus('智能助手请求失败', 'error');
-    showToast('智能助手失败', error.message, 'error');
-  } finally {
-    state.chatPending = false;
-    renderAssistant();
-    updateAssistantButton();
-  }
 }
 
 /**
@@ -1526,7 +1476,10 @@ function initSpeechRecognition() {
  * 切换语音输入状态
  */
 function toggleVoiceInput() {
-  if (!state.runtime.chatAvailable) return;
+  if (!state.runtime.chatAvailable) {
+    handleAssistantLockedClick();
+    return;
+  }
   if (!state.recognition) {
     showToast('当前浏览器不支持', '浏览器不支持语音输入，请直接输入文字。', 'error');
     return;
@@ -1546,6 +1499,9 @@ function initEvents() {
   $('#creatorRunBtn').addEventListener('click', runCreatorModule);
   $('#videoAnalyzeBtn').addEventListener('click', runAnalyzeModule);
   $('#clearResultsBtn').addEventListener('click', clearResults);
+  $('#runtimeModeToggle').addEventListener('click', toggleRuntimeMode);
+  $('#runtimeConfigForm').addEventListener('submit', submitRuntimeConfig);
+  $('#assistantLockOverlay').addEventListener('click', handleAssistantLockedClick);
   $('#videoLink').addEventListener('input', scheduleVideoResolve);
   $$('[data-module-tab]').forEach(button => {
     button.addEventListener('click', () => {
@@ -1804,6 +1760,9 @@ async function runCreatorModule() {
     renderWorkspaceOutline();
     setStatus('选题与文案生成失败', 'error');
     showToast('生成失败', error.message, 'error');
+    if (shouldPromptRuntimeConfig(error)) {
+      promptRuntimeConfigFromError(error, () => runCreatorModule());
+    }
   } finally {
     stopProgressJob('creator');
     setButtonLoading('creatorRunBtn', false);
@@ -1855,6 +1814,9 @@ async function runAnalyzeModule() {
     renderWorkspaceOutline();
     setStatus('视频分析失败', 'error');
     showToast('分析失败', error.message, 'error');
+    if (shouldPromptRuntimeConfig(error)) {
+      promptRuntimeConfigFromError(error, () => runAnalyzeModule());
+    }
   } finally {
     stopProgressJob('analyze');
     setButtonLoading('videoAnalyzeBtn', false);
@@ -1868,7 +1830,7 @@ async function runAnalyzeModule() {
  */
 async function sendAssistantMessage(forced = '') {
   if (!state.runtime.chatAvailable) {
-    showToast('当前不可用', '请先配置 LLM_API_KEY 并重启服务。', 'error');
+    handleAssistantLockedClick();
     return;
   }
   const input = $('#assistantMessage');
@@ -1921,6 +1883,9 @@ async function sendAssistantMessage(forced = '') {
     state.chatHistory.push({ role: 'assistant', content: `请求失败：${error.message}`, error: true });
     setStatus('智能助手请求失败', 'error');
     showToast('智能助手失败', error.message, 'error');
+    if (shouldPromptRuntimeConfig(error)) {
+      promptRuntimeConfigFromError(error);
+    }
     renderAssistant();
   } finally {
     stopProgressJob('assistant');

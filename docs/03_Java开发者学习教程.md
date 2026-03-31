@@ -51,10 +51,14 @@
 切换逻辑在：
 
 ```java
-AppProperties.llmEnabled()
+RuntimeLlmConfigService.runtimeLlmEnabled()
 ```
 
-只要 `.env` 里有 `LLM_API_KEY`，系统就会进入 LLM 模式。
+当前模式判断不再只看 `.env`。
+
+- `.env` 可以在启动时提供一组默认 LLM 配置
+- 页面顶部也可以直接保存运行时配置
+- 真正是否进入 `LLM Agent` 模式，还要看前端的运行模式开关是否打开
 
 ## 5. 如果你想新增一个接口
 
@@ -73,6 +77,7 @@ AppProperties.llmEnabled()
 - `application.yml`
 - `.env`
 - `LlmClientService`
+- `RuntimeLlmConfigService`
 
 Java 版目前走的是 `OpenAI Compatible` 风格的 LangChain4j 模型调用。
 
