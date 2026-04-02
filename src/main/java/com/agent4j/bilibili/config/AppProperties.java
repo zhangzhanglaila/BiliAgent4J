@@ -43,9 +43,19 @@ public class AppProperties {
     private String llmApiKey = "";
     private String llmBaseUrl = "https://zapi.aicc0.com/v1";
     private String llmModel = "gpt-5.4";
+    private String llmReasoningEffort = "";
+    private boolean llmDisableResponseStorage;
+    private boolean langsmithTracing;
+    private String langsmithApiKey = "";
+    private String langsmithProject = "bilibili-hot-rag";
+    private String langsmithEndpoint = "";
     private int llmTimeoutSeconds = 75;
     private int llmMaxRetries = 2;
     private double llmRetryBackoffSeconds = 1.6;
+    private String serpapiApiKey = "";
+    private String vectorDbPath = "./vector_db";
+    private String embeddingModelName = "BAAI/bge-small-zh-v1.5";
+    private String embeddingCacheDir = "./model_cache";
     private String biliSessdata = "";
     private String biliBiliJct = "";
     private String defaultPartition = "knowledge";
@@ -159,6 +169,54 @@ public class AppProperties {
         this.llmModel = llmModel;
     }
 
+    public String getLlmReasoningEffort() {
+        return llmReasoningEffort;
+    }
+
+    public void setLlmReasoningEffort(String llmReasoningEffort) {
+        this.llmReasoningEffort = llmReasoningEffort;
+    }
+
+    public boolean isLlmDisableResponseStorage() {
+        return llmDisableResponseStorage;
+    }
+
+    public void setLlmDisableResponseStorage(boolean llmDisableResponseStorage) {
+        this.llmDisableResponseStorage = llmDisableResponseStorage;
+    }
+
+    public boolean isLangsmithTracing() {
+        return langsmithTracing;
+    }
+
+    public void setLangsmithTracing(boolean langsmithTracing) {
+        this.langsmithTracing = langsmithTracing;
+    }
+
+    public String getLangsmithApiKey() {
+        return langsmithApiKey;
+    }
+
+    public void setLangsmithApiKey(String langsmithApiKey) {
+        this.langsmithApiKey = langsmithApiKey;
+    }
+
+    public String getLangsmithProject() {
+        return langsmithProject;
+    }
+
+    public void setLangsmithProject(String langsmithProject) {
+        this.langsmithProject = langsmithProject;
+    }
+
+    public String getLangsmithEndpoint() {
+        return langsmithEndpoint;
+    }
+
+    public void setLangsmithEndpoint(String langsmithEndpoint) {
+        this.langsmithEndpoint = langsmithEndpoint;
+    }
+
     /**
      * 获取 LLM 超时时间。
      *
@@ -211,6 +269,38 @@ public class AppProperties {
      */
     public void setLlmRetryBackoffSeconds(double llmRetryBackoffSeconds) {
         this.llmRetryBackoffSeconds = llmRetryBackoffSeconds;
+    }
+
+    public String getSerpapiApiKey() {
+        return serpapiApiKey;
+    }
+
+    public void setSerpapiApiKey(String serpapiApiKey) {
+        this.serpapiApiKey = serpapiApiKey;
+    }
+
+    public String getVectorDbPath() {
+        return vectorDbPath;
+    }
+
+    public void setVectorDbPath(String vectorDbPath) {
+        this.vectorDbPath = vectorDbPath;
+    }
+
+    public String getEmbeddingModelName() {
+        return embeddingModelName;
+    }
+
+    public void setEmbeddingModelName(String embeddingModelName) {
+        this.embeddingModelName = embeddingModelName;
+    }
+
+    public String getEmbeddingCacheDir() {
+        return embeddingCacheDir;
+    }
+
+    public void setEmbeddingCacheDir(String embeddingCacheDir) {
+        this.embeddingCacheDir = embeddingCacheDir;
     }
 
     /**

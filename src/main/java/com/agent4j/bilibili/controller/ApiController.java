@@ -1,18 +1,27 @@
 package com.agent4j.bilibili.controller;
 
 import com.agent4j.bilibili.service.LlmClientService;
+import com.agent4j.bilibili.service.KnowledgeBaseService;
+import com.agent4j.bilibili.service.KnowledgeSyncService;
+import com.agent4j.bilibili.service.KnowledgeUpdateJobService;
+import com.agent4j.bilibili.service.LongTermMemoryService;
 import com.agent4j.bilibili.service.RuntimeInfoService;
 import com.agent4j.bilibili.service.WorkspaceService;
 import com.agent4j.bilibili.web.ApiResponse;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api")
@@ -21,6 +30,10 @@ public class ApiController {
     private final WorkspaceService workspaceService;
     private final LlmClientService llmClientService;
     private final RuntimeInfoService runtimeInfoService;
+    private final KnowledgeBaseService knowledgeBaseService;
+    private final KnowledgeSyncService knowledgeSyncService;
+    private final LongTermMemoryService longTermMemoryService;
+    private final KnowledgeUpdateJobService knowledgeUpdateJobService;
 
     /**
      * 创建 API 控制器并注入依赖
@@ -31,11 +44,19 @@ public class ApiController {
     public ApiController(
             WorkspaceService workspaceService,
             LlmClientService llmClientService,
-            RuntimeInfoService runtimeInfoService
+            RuntimeInfoService runtimeInfoService,
+            KnowledgeBaseService knowledgeBaseService,
+            KnowledgeSyncService knowledgeSyncService,
+            LongTermMemoryService longTermMemoryService,
+            KnowledgeUpdateJobService knowledgeUpdateJobService
     ) {
         this.workspaceService = workspaceService;
         this.llmClientService = llmClientService;
         this.runtimeInfoService = runtimeInfoService;
+        this.knowledgeBaseService = knowledgeBaseService;
+        this.knowledgeSyncService = knowledgeSyncService;
+        this.longTermMemoryService = longTermMemoryService;
+        this.knowledgeUpdateJobService = knowledgeUpdateJobService;
     }
 
     /**
@@ -67,6 +88,95 @@ public class ApiController {
     @PostMapping("/runtime-llm-config")
     public ApiResponse<Map<String, Object>> runtimeLlmConfig(@RequestBody Map<String, Object> body) {
         return ApiResponse.success(workspaceService.saveRuntimeLlmConfig(body));
+    }
+
+    @GetMapping("/knowledge/status")
+    public ApiResponse<Map<String, Object>> knowledgeStatus() {
+        return ApiResponse.success(
+                knowledgeSyncService.buildKnowledgeBaseStatus(
+                        longTermMemoryService,
+                        knowledgeUpdateJobService.getActiveKnowledgeUpdateJob()
+                )
+        );
+    }
+
+    @GetMapping("/knowledge/sample")
+    public ApiResponse<Map<String, Object>> knowledgeSample(
+            @RequestParam(name = "limit", defaultValue = "10") int limit,
+            @RequestParam(name = "offset", defaultValue = "0") int offset
+    ) {
+        return ApiResponse.success(knowledgeBaseService.sample(limit, offset, null));
+    }
+
+    @GetMapping("/knowledge/search")
+    public ApiResponse<Map<String, Object>> knowledgeSearch(
+            @RequestParam(name = "q") String query,
+            @RequestParam(name = "limit", defaultValue = "6") int limit
+    ) {
+        String cleanQuery = String.valueOf(query).trim();
+        if (cleanQuery.isBlank()) {
+            throw new IllegalArgumentException("请输入检索关键词。");
+        }
+        Map<String, Object> raw = knowledgeBaseService.retrieve(cleanQuery, Math.max(limit, 24), null);
+        List<Map<String, Object>> matches = raw.get("matches") instanceof List<?> list
+                ? list.stream().filter(Map.class::isInstance).map(item -> castMap((Map<?, ?>) item)).toList()
+                : List.of();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("query", cleanQuery);
+        payload.put("matches", knowledgeSyncService.collapseKnowledgeMatches(matches).stream().limit(Math.max(1, limit)).toList());
+        return ApiResponse.success(payload);
+    }
+
+    @PostMapping(value = "/knowledge/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<Map<String, Object>> knowledgeUpload(@RequestParam("file") MultipartFile file) throws Exception {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("请先选择要上传的知识文件。");
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("upload_result", knowledgeSyncService.ingestUploadedFile(
+                file.getOriginalFilename(),
+                file.getBytes(),
+                Map.of("source_channel", "web_upload")
+        ));
+        payload.put("knowledge_status", knowledgeSyncService.buildKnowledgeBaseStatus(
+                longTermMemoryService,
+                knowledgeUpdateJobService.getActiveKnowledgeUpdateJob()
+        ));
+        return ApiResponse.success(payload);
+    }
+
+    @PostMapping("/knowledge/update")
+    public ApiResponse<Map<String, Object>> knowledgeUpdate(@RequestBody(required = false) Map<String, Object> body) {
+        int limit = readInt(body == null ? null : body.get("limit"), 10, 1, 20);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("update_result", knowledgeSyncService.updateKnowledgeBase(limit, null));
+        payload.put("knowledge_status", knowledgeSyncService.buildKnowledgeBaseStatus(
+                longTermMemoryService,
+                knowledgeUpdateJobService.getActiveKnowledgeUpdateJob()
+        ));
+        return ApiResponse.success(payload);
+    }
+
+    @PostMapping("/knowledge/update/start")
+    public ApiResponse<Map<String, Object>> knowledgeUpdateStart(@RequestBody(required = false) Map<String, Object> body) {
+        int limit = readInt(body == null ? null : body.get("limit"), 10, 1, 20);
+        Map<String, Object> result = knowledgeUpdateJobService.startKnowledgeUpdate(limit);
+        if (!String.valueOf(result.getOrDefault("error", "")).isBlank()) {
+            throw new IllegalStateException(String.valueOf(result.get("error")));
+        }
+        return ApiResponse.success(Map.of(
+                "job", result.get("job"),
+                "already_running", result.get("already_running")
+        ));
+    }
+
+    @GetMapping("/knowledge/update/{jobId}")
+    public ApiResponse<Map<String, Object>> knowledgeUpdateJob(@PathVariable("jobId") String jobId) {
+        Map<String, Object> job = knowledgeUpdateJobService.getKnowledgeUpdateJob(String.valueOf(jobId).trim());
+        if (job == null) {
+            throw new IllegalArgumentException("未找到对应的知识库更新任务。");
+        }
+        return ApiResponse.success(job);
     }
 
     /**
@@ -237,5 +347,20 @@ public class ApiController {
             return value;
         }
         return "true".equalsIgnoreCase(String.valueOf(raw).trim());
+    }
+
+    private int readInt(Object raw, int fallback, int min, int max) {
+        try {
+            int value = Integer.parseInt(String.valueOf(raw == null ? fallback : raw).trim());
+            return Math.max(min, Math.min(value, max));
+        } catch (Exception exception) {
+            return fallback;
+        }
+    }
+
+    private Map<String, Object> castMap(Map<?, ?> source) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        source.forEach((key, value) -> result.put(String.valueOf(key), value));
+        return result;
     }
 }

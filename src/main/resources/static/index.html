@@ -14,7 +14,7 @@
           <div class="brand__badge">B</div>
           <div>
             <h1>B站内容策划与视频分析工作台</h1>
-            <p>左侧切换视频分析与内容创作，右侧是对话式智能助手。</p>
+            <p>左侧切换视频分析、内容创作与知识库管理，右侧是对话式智能助手。</p>
           </div>
         </div>
         <div class="topbar__status-wrap">
@@ -34,6 +34,7 @@
           <nav class="workspace-nav" aria-label="功能切换">
             <button class="workspace-tab is-active" type="button" data-module-tab="analyze">视频分析</button>
             <button class="workspace-tab" type="button" data-module-tab="create">内容创作</button>
+            <button class="workspace-tab" type="button" data-module-tab="knowledge">知识库管理</button>
           </nav>
 
           <div class="workspace-main__content">
@@ -42,19 +43,20 @@
               <span class="hero-card__tag">Bilibili Creator Workspace</span>
               <h2>把发布前的选题文案，和发布后的数据分析，拆成两条独立工作流。</h2>
               <p>
-                通过顶部标签直接切换视频分析与内容创作，不需要在两个模块之间来回滚动。
+                通过顶部标签直接切换视频分析、内容创作与知识库管理，不需要在多个模块之间来回滚动。
                 右侧助手采用连续会话布局，快捷提问、语音输入和发送按钮都固定在底部区域。
               </p>
               <div class="hero-points">
                 <span class="result-badge">视频分析：解析 + 优化</span>
                 <span class="result-badge">内容创作：选题 + 文案</span>
+                <span class="result-badge">知识库管理：入库 + 查看</span>
                 <span class="result-badge" id="runtimeModeBadge">运行模式：无 Key 逻辑模式</span>
               </div>
             </div>
             <div class="hero-metrics">
               <div class="metric-box">
                 <span class="metric-box__label">业务面板</span>
-                <strong>2 个模块 + 1 个助手</strong>
+                <strong>3 个模块 + 1 个助手</strong>
               </div>
               <div class="metric-box">
                 <span class="metric-box__label">核心能力</span>
@@ -85,7 +87,9 @@
             <div class="mode-banner__meta">
               <div class="result-badge" id="runtimeTokenBadge">不会消耗 token，智能助手当前关闭</div>
               <div class="result-badge" id="runtimeSwitchHint">当前还没有可用 LLM 配置，打开右侧开关后需要先填写 URL、Key 和模型供应商。</div>
-              <div class="result-badge" id="runtimeConfigSummary">当前没有已保存的 LLM 配置</div>
+              <div class="result-badge" id="runtimeConfigSummary">
+                当前没有已保存的 LLM 配置
+              </div>
             </div>
             <form class="runtime-config-form" id="runtimeConfigForm" hidden>
               <div class="runtime-config-form__grid">
@@ -228,6 +232,46 @@
                     <p>输入领域、方向和想法后，点击“一键生成选题与文案”。</p>
                   </div>
                 </div>
+              </div>
+            </section>
+
+            <section class="panel module-panel module-panel--knowledge" data-module="knowledge" id="knowledgePanel" data-outline-title="知识库管理">
+              <div class="panel__header">
+                <div>
+                  <span class="module-kicker">知识库管理</span>
+                  <h3>上传文件、同步热门样本，并在统一工作区查看向量库内容</h3>
+                  <p>这里保留原有上传、同步、查看、检索逻辑，只重构页面布局和交互层级，让操作区和结果区更清晰。</p>
+                </div>
+              </div>
+
+              <div class="module-panel__body">
+                <div class="knowledge-status-bar" id="knowledgeStatusBar">
+                  <span>正在读取知识库状态...</span>
+                </div>
+
+                <nav class="knowledge-subtabs" aria-label="知识库功能切换">
+                  <button class="knowledge-subtab is-active" type="button" data-knowledge-subtab="upload">上传知识文件</button>
+                  <button class="knowledge-subtab" type="button" data-knowledge-subtab="sync">同步热门样本</button>
+                  <button class="knowledge-subtab" type="button" data-knowledge-subtab="view">查看知识库</button>
+                  <button class="knowledge-subtab" type="button" data-knowledge-subtab="search">关键词检索</button>
+                </nav>
+
+                <section class="knowledge-stage">
+                  <div class="knowledge-stage__section">
+                    <div class="knowledge-stage__label">操作区</div>
+                    <div id="knowledgeActionHost" aria-live="polite"></div>
+                  </div>
+
+                  <div class="knowledge-stage__section">
+                    <div class="knowledge-stage__label">结果展示区</div>
+                    <div class="module-result" id="knowledgeStageResult" data-outline-title="知识库结果">
+                      <div class="empty-state">
+                        <h4>等待操作</h4>
+                        <p>默认展示“上传知识文件”功能。切换上方子 Tab 后，这里会显示对应功能的结果。</p>
+                      </div>
+                    </div>
+                  </div>
+                </section>
               </div>
             </section>
           </div>

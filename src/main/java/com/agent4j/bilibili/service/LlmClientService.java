@@ -223,13 +223,18 @@ public class LlmClientService {
      * @return LangChain4j 聊天模型
      */
     private ChatModel chatModel(RuntimeLlmConfigService.RuntimeLlmConfig config) {
-        return OpenAiChatModel.builder()
+        OpenAiChatModel.OpenAiChatModelBuilder builder = OpenAiChatModel.builder()
                 .apiKey(config.apiKey())
                 .baseUrl(config.baseUrl())
                 .modelName(config.model())
                 .timeout(Duration.ofSeconds(properties.getLlmTimeoutSeconds()))
                 .maxRetries(0)
-                .build();
+                .store(!properties.isLlmDisableResponseStorage());
+        String reasoningEffort = String.valueOf(properties.getLlmReasoningEffort()).trim();
+        if (!reasoningEffort.isBlank()) {
+            builder.reasoningEffort(reasoningEffort);
+        }
+        return builder.build();
     }
 
     /**

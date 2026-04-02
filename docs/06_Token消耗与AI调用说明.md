@@ -1,64 +1,48 @@
 # Token 消耗与 AI 调用说明
 
-## 1. 什么时候不消耗 token
+## 1. 两种运行模式
 
-当当前没有可用运行时 LLM 配置，或者页面开关处于关闭状态时：
+### 1.1 无 Key 逻辑模式
 
-- 系统运行在规则模式
-- 内容创作走 Java 规则链路
-- 视频分析走 Java 规则链路
-- 智能助手关闭
+- 不调用外部 LLM
 - 不消耗 token
+- 智能助手关闭
+- 视频分析和内容创作走 Java 规则链路
 
-## 2. 什么时候会消耗 token
+### 1.2 LLM Agent 模式
 
-当页面已经开启 `LLM Agent` 模式，且当前存在可用的 LLM 配置时：
-
-- 文案生成可以调用 LangChain4j
-- 聊天助手可用
-- 模块级分析可走 LLM 回退链路
+- 调用外部 LLM
 - 会消耗 token
+- 智能助手启用
+- 模块任务会优先尝试 Agent 工具链
 
-## 3. 当前 AI 调用位置
+## 2. 哪些能力会触发 LLM
 
-Java 版里，和 AI 调用相关的核心位置是：
+- 智能助手对话
+- 模块级结构化创作
+- 模块级结构化视频分析
+- Agent 反思与最终结果整理
 
-- `LlmClientService`
-- `CopywritingService`
-- `WorkspaceService.chat(...)`
-- `WorkspaceService` 中的 LLM 回退逻辑
+## 3. 哪些能力不一定触发 LLM
 
-## 4. 为什么保留规则模式
+- 知识库上传
+- 知识库样本浏览
+- 知识库检索
+- 热门榜同步
+- 本地代码解释器执行
 
-因为当前项目要同时满足：
+这些主要是 Java 本地能力。
 
-- 没 Key 也能运行
-- 有 Key 时能增强
+## 4. 相关配置
 
-所以规则模式不是降级，而是正式运行模式之一。
+- `LLM_API_KEY`
+- `LLM_BASE_URL`
+- `LLM_MODEL`
+- `LLM_REASONING_EFFORT`
+- `LLM_DISABLE_RESPONSE_STORAGE`
+- `LANGSMITH_TRACING`
 
-## 5. 当前策略
+## 5. 联网搜索说明
 
-### 文案生成
-
-- 先有稳定 fallback
-- 再让 LLM 做增强
-
-### 视频分析
-
-- 规则模式直接做判断
-- LLM 模式可走 direct fallback
-
-### 聊天助手
-
-- 只有 LLM 模式开启
-
-## 6. 成本控制建议
-
-如果你只需要：
-
-- 选题
-- 视频解析
-- 基础优化建议
-
-且不依赖对话助手，那么可以不配置 `LLM_API_KEY`，或者仅保持页面运行在规则模式。
+- `web_search` 使用 `SERPAPI_API_KEY`
+- 未配置时，联网搜索工具不可用或结果有限

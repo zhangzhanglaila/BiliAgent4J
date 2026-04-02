@@ -15,9 +15,19 @@ app:
   llm-api-key: ${LLM_API_KEY:}
   llm-base-url: ${LLM_BASE_URL:https://zapi.aicc0.com/v1}
   llm-model: ${LLM_MODEL:gpt-5.4}
+  llm-reasoning-effort: ${LLM_REASONING_EFFORT:}
+  llm-disable-response-storage: ${LLM_DISABLE_RESPONSE_STORAGE:false}
+  langsmith-tracing: ${LANGSMITH_TRACING:${LANGCHAIN_TRACING_V2:false}}
+  langsmith-api-key: ${LANGSMITH_API_KEY:${LANGCHAIN_API_KEY:}}
+  langsmith-project: ${LANGSMITH_PROJECT:${LANGCHAIN_PROJECT:bilibili-hot-rag}}
+  langsmith-endpoint: ${LANGSMITH_ENDPOINT:${LANGCHAIN_ENDPOINT:}}
   llm-timeout-seconds: ${LLM_TIMEOUT_SECONDS:75}
   llm-max-retries: ${LLM_MAX_RETRIES:2}
   llm-retry-backoff-seconds: ${LLM_RETRY_BACKOFF_SECONDS:1.6}
+  serpapi-api-key: ${SERPAPI_API_KEY:}
+  vector-db-path: ${VECTOR_DB_PATH:./vector_db}
+  embedding-model-name: ${EMBEDDING_MODEL_NAME:BAAI/bge-small-zh-v1.5}
+  embedding-cache-dir: ${EMBEDDING_CACHE_DIR:./model_cache}
   bili-sessdata: ${BILI_SESSDATA:}
   bili-bili-jct: ${BILI_BILI_JCT:}
   default-partition: ${DEFAULT_PARTITION:knowledge}

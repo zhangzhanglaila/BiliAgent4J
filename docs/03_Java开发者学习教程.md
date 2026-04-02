@@ -1,106 +1,65 @@
 # Java 开发者学习教程
 
-## 1. 先理解这个项目在做什么
+## 1. 建议阅读顺序
 
-这个项目不是“一个聊天机器人”，而是围绕 B 站创作者工作流做了两段明确链路：
+1. [AppProperties.java](D:/BiliAgent4J/src/main/java/com/agent4j/bilibili/config/AppProperties.java)
+2. [ApiController.java](D:/BiliAgent4J/src/main/java/com/agent4j/bilibili/controller/ApiController.java)
+3. [WorkspaceService.java](D:/BiliAgent4J/src/main/java/com/agent4j/bilibili/service/WorkspaceService.java)
+4. [LlmWorkspaceAgentService.java](D:/BiliAgent4J/src/main/java/com/agent4j/bilibili/service/LlmWorkspaceAgentService.java)
+5. 知识库相关服务
 
-1. 发布前：选题 + 文案
-2. 发布后：视频解析 + 表现判断 + 优化建议
+## 2. 代码分层
 
-在 Java 版里，这两段链路由 `WorkspaceService` 做总编排。
+- `controller`：HTTP 接口入口
+- `service`：业务实现
+- `config`：配置和参数映射
+- `model`：数据模型
+- `repository`：持久化访问
+- `resources/static`：前端静态资源
 
-## 2. 你应该先看哪些类
+## 3. 你最需要理解的 Java 版新增模块
 
-建议顺序：
+### 3.1 知识库
 
-1. `controller/ApiController.java`
-2. `service/WorkspaceService.java`
-3. `service/VideoResolverService.java`
-4. `service/TopicService.java`
-5. `service/CopywritingService.java`
-6. `service/OptimizationService.java`
-7. `service/ReferenceVideoService.java`
-8. `service/LlmClientService.java`
+- [KnowledgeBaseService.java](D:/BiliAgent4J/src/main/java/com/agent4j/bilibili/service/KnowledgeBaseService.java)
+- [KnowledgeSyncService.java](D:/BiliAgent4J/src/main/java/com/agent4j/bilibili/service/KnowledgeSyncService.java)
+- [KnowledgeUpdateJobService.java](D:/BiliAgent4J/src/main/java/com/agent4j/bilibili/service/KnowledgeUpdateJobService.java)
+- [KnowledgeFileTextExtractor.java](D:/BiliAgent4J/src/main/java/com/agent4j/bilibili/service/KnowledgeFileTextExtractor.java)
 
-## 3. 这个项目是怎么分层的
+### 3.2 长期记忆
 
-### Controller 层
+- [LongTermMemoryService.java](D:/BiliAgent4J/src/main/java/com/agent4j/bilibili/service/LongTermMemoryService.java)
 
-只负责：
+### 3.3 工具链
 
-- 收请求
-- 做少量入参校验
-- 把请求转给 `WorkspaceService`
+- `retrieval`
+- `web_search`
+- `code_interpreter`
+- `creator_briefing`
+- `video_briefing`
+- `hot_board_snapshot`
 
-### Service 层
+这些工具注册在：
 
-这里是核心：
+- [LlmWorkspaceAgentService.java](D:/BiliAgent4J/src/main/java/com/agent4j/bilibili/service/LlmWorkspaceAgentService.java)
 
-- B 站视频解析
-- 热点抓取
-- 规则链路
-- LangChain4j LLM 调用
-- 模块级编排
+## 4. 常见扩展方式
 
-### Repository 层
+### 4.1 新增一个工具
 
-只负责 SQLite 持久化视频历史指标。
+1. 在对应 `service` 中实现能力。
+2. 在 `LlmWorkspaceAgentService.registeredTools()` 注册工具。
+3. 在 `toolDescription()` 增加说明。
+4. 在前端或模块调用路径里接入。
 
-## 4. 规则模式和 LLM 模式怎么切
+### 4.2 新增一个知识库来源
 
-切换逻辑在：
+1. 在 `KnowledgeSyncService` 中增加数据抓取逻辑。
+2. 设计文档 ID、metadata、结构化正文。
+3. 保持结果结构兼容前端进度展示。
 
-```java
-RuntimeLlmConfigService.runtimeLlmEnabled()
-```
+### 4.3 新增一个文件类型
 
-当前模式判断不再只看 `.env`。
-
-- `.env` 可以在启动时提供一组默认 LLM 配置
-- 页面顶部也可以直接保存运行时配置
-- 真正是否进入 `LLM Agent` 模式，还要看前端的运行模式开关是否打开
-
-## 5. 如果你想新增一个接口
-
-推荐做法：
-
-1. 先在 `WorkspaceService` 里定义编排逻辑
-2. 如果有独立业务能力，再拆单独 service
-3. 最后在 `ApiController` 暴露接口
-
-不要把复杂业务直接写进 controller。
-
-## 6. 如果你想替换模型提供方
-
-重点改这里：
-
-- `application.yml`
-- `.env`
-- `LlmClientService`
-- `RuntimeLlmConfigService`
-
-Java 版目前走的是 `OpenAI Compatible` 风格的 LangChain4j 模型调用。
-
-## 7. 如果你想扩展规则链路
-
-最常改的是：
-
-- `TopicService`
-- `CopywritingService`
-- `OptimizationService`
-- `ReferenceVideoService`
-
-建议保持：
-
-- 输入输出字段不变
-- 前端依赖的 JSON 结构不变
-
-## 8. 最后再看前端
-
-前端资源在：
-
-```text
-src/main/resources/static
-```
-
-当前 Java 版沿用了原项目的页面结构和交互逻辑，所以后端接口契约必须尽量对齐。
+1. 在 `KnowledgeFileTextExtractor` 中增加解析逻辑。
+2. 在 `SUPPORTED_UPLOAD_TYPES` 中声明。
+3. 增加测试。
