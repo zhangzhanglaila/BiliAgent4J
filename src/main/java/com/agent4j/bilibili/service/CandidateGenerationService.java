@@ -20,6 +20,12 @@ public class CandidateGenerationService {
     private final LlmClientService llmClientService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * 创建候选生成服务。
+     *
+     * @param llmClientService LLM 客户端服务
+     * @param objectMapper JSON 映射器
+     */
     public CandidateGenerationService(LlmClientService llmClientService, ObjectMapper objectMapper) {
         this.llmClientService = llmClientService;
         this.objectMapper = objectMapper;

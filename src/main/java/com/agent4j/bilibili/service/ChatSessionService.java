@@ -54,6 +54,10 @@ public class ChatSessionService {
         initSessionsDirectory();
     }
 
+    /**
+     * 初始化会话存储目录。
+     * 若会话目录不存在则创建，并确保索引文件存在。
+     */
     private void initSessionsDirectory() {
         try {
             Files.createDirectories(sessionsDir);
@@ -66,14 +70,28 @@ public class ChatSessionService {
         }
     }
 
+    /**
+     * 获取会话索引文件路径。
+     * @return 索引文件 Path
+     */
     private Path indexPath() {
         return sessionsDir.resolve(SESSIONS_INDEX_FILE);
     }
 
+    /**
+     * 获取指定会话的元数据文件路径。
+     * @param sessionId 会话 ID
+     * @return 元数据文件 Path
+     */
     private Path metaPath(String sessionId) {
         return sessionsDir.resolve(sessionId + SESSION_META_SUFFIX);
     }
 
+    /**
+     * 获取指定会话的历史文件路径。
+     * @param sessionId 会话 ID
+     * @return 历史文件 Path
+     */
     private Path historyPath(String sessionId) {
         return sessionsDir.resolve(sessionId + SESSION_HISTORY_SUFFIX);
     }

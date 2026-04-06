@@ -243,6 +243,11 @@ public class KnowledgeBaseService {
         return new ArrayList<>(merged.values());
     }
 
+    /**
+     * 从本地 JSON 文件加载知识库记录。
+     * 使用锁保证并发安全，若文件不存在或解析失败返回空列表。
+     * @return 知识库记录列表
+     */
     private List<Map<String, Object>> loadRecords() {
         fallbackLock.lock();
         try {
@@ -277,6 +282,11 @@ public class KnowledgeBaseService {
         }
     }
 
+    /**
+     * 将知识库记录持久化到本地 JSON 文件。
+     * 使用原子操作（写临时文件再移动）保证数据一致性。
+     * @param records 要写入的记录列表
+     */
     private void writeRecords(List<Map<String, Object>> records) {
         fallbackLock.lock();
         try {
@@ -295,6 +305,13 @@ public class KnowledgeBaseService {
         }
     }
 
+    /**
+     * 检查记录是否匹配元数据过滤条件。
+     * document_id 单独比较，其他字段从 metadata 中取值比较。
+     * @param record 知识库记录
+     * @param metadataFilter 元数据过滤条件
+     * @return 是否匹配
+     */
     private boolean matchesMetadata(Map<String, Object> record, Map<String, Object> metadataFilter) {
         if (metadataFilter == null || metadataFilter.isEmpty()) {
             return true;
@@ -315,6 +332,11 @@ public class KnowledgeBaseService {
         return true;
     }
 
+    /**
+     * 从记录中提取 metadata 字段。
+     * @param record 知识库记录
+     * @return metadata Map，若不存在则返回空 Map
+     */
     private Map<String, Object> metadataOf(Map<String, Object> record) {
         Object metadata = record.get("metadata");
         if (!(metadata instanceof Map<?, ?> source)) {
@@ -327,6 +349,11 @@ public class KnowledgeBaseService {
         return result;
     }
 
+    /**
+     * 将对象安全转换为向量列表。
+     * @param raw 原始对象
+     * @return Double 列表，若转换失败返回空列表
+     */
     private List<Double> readEmbedding(Object raw) {
         if (!(raw instanceof List<?> list)) {
             return List.of();
@@ -338,6 +365,13 @@ public class KnowledgeBaseService {
         return embedding;
     }
 
+    /**
+     * 将长文本按指定大小和重叠字符数切分成块。
+     * @param text 原始文本
+     * @param chunkSize 每块最大字符数
+     * @param overlap 块间重叠字符数
+     * @return 文本块列表
+     */
     private List<String> splitText(String text, int chunkSize, int overlap) {
         String clean = stringValue(text);
         if (clean.isBlank()) {
@@ -362,6 +396,11 @@ public class KnowledgeBaseService {
         return chunks;
     }
 
+    /**
+     * 获取知识库最近更新时间。
+     * 遍历存储目录下所有文件，返回最新修改时间对应的格式化字符串。
+     * @return 格式化的时间字符串，若无文件则返回空字符串
+     */
     private String lastUpdatedAt() {
         try (Stream<Path> stream = Files.walk(persistDirectory)) {
             return stream
@@ -381,10 +420,20 @@ public class KnowledgeBaseService {
         }
     }
 
+    /**
+     * 安全转换为字符串，去除首尾空白。
+     * @param value 原始值
+     * @return 字符串结果，null 转空字符串
+     */
     private String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
     }
 
+    /**
+     * 安全转换为 double。
+     * @param value 原始值
+     * @return double 值，转换失败返回 0.0
+     */
     private double doubleValue(Object value) {
         if (value instanceof Number number) {
             return number.doubleValue();

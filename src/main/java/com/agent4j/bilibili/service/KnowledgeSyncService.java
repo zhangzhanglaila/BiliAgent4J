@@ -206,6 +206,12 @@ public class KnowledgeSyncService {
         return knowledgeBaseService.collapseMatches(matches);
     }
 
+    /**
+     * 根据板块规格获取对应视频列表。
+     *
+     * @param board 板块规格
+     * @return 视频指标列表
+     */
     private List<VideoMetrics> fetchBoardVideos(BoardSpec board) {
         return switch (board.boardType()) {
             case "all" -> topicDataService.fetchHotVideos();
@@ -213,6 +219,13 @@ public class KnowledgeSyncService {
         };
     }
 
+    /**
+     * 构建知识库文档 ID。
+     *
+     * @param board 板块规格
+     * @param video 视频指标
+     * @return 文档 ID 字符串
+     */
     private String buildDocumentId(BoardSpec board, VideoMetrics video) {
         String bvid = TextUtils.cleanCopyText(video.getBvid());
         if (bvid.isBlank()) {
@@ -221,6 +234,13 @@ public class KnowledgeSyncService {
         return ("all".equals(board.boardType()) ? "hot:" : "partition:" + board.partition() + ":") + bvid;
     }
 
+    /**
+     * 构建视频的结构化文本描述。
+     *
+     * @param board 板块规格
+     * @param video 视频指标
+     * @return 结构化文本
+     */
     private String buildStructuredVideoText(BoardSpec board, VideoMetrics video) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("榜单来源", board.label());
@@ -246,6 +266,12 @@ public class KnowledgeSyncService {
         }
     }
 
+    /**
+     * 向进度回调发送通知。
+     *
+     * @param progressCallback 进度回调
+     * @param payload 通知载荷
+     */
     private void notify(Consumer<Map<String, Object>> progressCallback, Map<String, Object> payload) {
         if (progressCallback == null) {
             return;
@@ -256,6 +282,15 @@ public class KnowledgeSyncService {
         }
     }
 
+    /**
+     * 计算同步进度百分比。
+     *
+     * @param processedItems 已处理条目数
+     * @param totalItems 总条目数
+     * @param processedBoards 已处理板块数
+     * @param totalBoards 总板块数
+     * @return 进度百分比，0 到 100
+     */
     private int progressPercent(int processedItems, int totalItems, int processedBoards, int totalBoards) {
         if (totalItems > 0) {
             return (int) Math.max(0, Math.min(100, Math.round((processedItems * 100.0) / totalItems)));
@@ -266,6 +301,12 @@ public class KnowledgeSyncService {
         return 0;
     }
 
+    /**
+     * 获取文件后缀名（小写）。
+     *
+     * @param filename 文件名
+     * @return 后缀名，包含点号，如 ".txt"
+     */
     private String suffix(String filename) {
         int index = filename.lastIndexOf('.');
         return index < 0 ? "" : filename.substring(index).toLowerCase();

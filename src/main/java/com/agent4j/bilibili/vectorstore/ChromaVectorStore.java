@@ -34,6 +34,12 @@ public class ChromaVectorStore {
     private String initError = "";
     private String backendDetail = "";
 
+    /**
+     * 创建 Chroma 向量存储客户端。
+     *
+     * @param properties 应用配置
+     * @param objectMapper JSON 映射器
+     */
     public ChromaVectorStore(AppProperties properties, ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
         this.collectionName = "bilibili_knowledge";

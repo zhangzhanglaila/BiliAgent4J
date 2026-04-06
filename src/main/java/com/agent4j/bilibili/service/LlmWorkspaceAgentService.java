@@ -452,6 +452,13 @@ public class LlmWorkspaceAgentService {
         }
     }
 
+    /**
+     * 自动加载历史对话记录并追加到 scratchpad。
+     * 仅在 queryText 非空时执行，从长期记忆服务检索相关历史。
+     * @param memoryUserId 用户标识
+     * @param queryText 查询文本
+     * @param scratchpad 工具调用记录列表
+     */
     private void autoLoadHistory(String memoryUserId, String queryText, List<Map<String, Object>> scratchpad) {
         if (queryText.isBlank()) {
             return;
@@ -464,6 +471,13 @@ public class LlmWorkspaceAgentService {
         ));
     }
 
+    /**
+     * 自动从知识库检索相关内容并追加到 scratchpad。
+     * 仅在 queryText 非空时执行，将检索结果作为 observation 记录。
+     * @param queryText 查询文本
+     * @param scratchpad 工具调用记录列表
+     * @param usedTools 已使用工具列表
+     */
     private void autoRetrieve(String queryText, List<Map<String, Object>> scratchpad, List<String> usedTools) {
         if (queryText.isBlank()) {
             return;
@@ -475,6 +489,15 @@ public class LlmWorkspaceAgentService {
         scratchpad.add(toolObservation("retrieval", Map.of("query", queryText, "limit", 4), observation));
     }
 
+    /**
+     * 简单 Reflection：验证最终结果是否满足任务要求。
+     * 调用高级 Reflection 逻辑，传入空的 scratchpad 和 requiredFinalKeys。
+     * @param taskName 任务名称
+     * @param taskGoal 任务目标
+     * @param userPayload 用户输入数据
+     * @param responseContract 响应契约
+     * @param finalResult 最终结果
+     */
     private void applyReflection(
             String taskName,
             String taskGoal,
@@ -573,6 +596,14 @@ public class LlmWorkspaceAgentService {
         return missing;
     }
 
+    /**
+     * 异步保存执行结果到长期记忆服务。
+     * 将任务名、用户输入和最终结果打包，通过线程池异步写入长期记忆。
+     * @param memoryUserId 用户标识
+     * @param taskName 任务名称
+     * @param userPayload 用户输入数据
+     * @param finalResult 最终结果
+     */
     private void saveMemoryAsync(String memoryUserId, String taskName, Map<String, Object> userPayload, Map<String, Object> finalResult) {
         memoryExecutor.submit(() -> {
             try {
@@ -586,6 +617,14 @@ public class LlmWorkspaceAgentService {
         });
     }
 
+    /**
+     * 根据任务名称从用户输入构建检索用查询文本。
+     * 不同任务类型拼接不同字段：module_create 拼接领域/方向/创意/分区，
+     * module_analyze 拼接 URL/标题/话题/UP主/分区，workspace_chat 拼接消息和创作者上下文。
+     * @param taskName 任务名称
+     * @param userPayload 用户输入数据
+     * @return 拼接后的查询文本
+     */
     private String buildQueryText(String taskName, Map<String, Object> userPayload) {
         if ("module_create".equals(taskName)) {
             return String.join(" ",
@@ -619,11 +658,31 @@ public class LlmWorkspaceAgentService {
         return JsonUtils.write(objectMapper, userPayload);
     }
 
+    /**
+     * 从用户输入中解析长期记忆用的用户标识。
+     * 优先使用 payload 中的 memory_user_id，若为空则回退为 taskName。
+     * @param taskName 任务名称
+     * @param userPayload 用户输入数据
+     * @return 用户标识字符串
+     */
     private String resolveMemoryUserId(String taskName, Map<String, Object> userPayload) {
         String value = stringValue(userPayload.get("memory_user_id"));
         return value.isBlank() ? taskName : value;
     }
 
+    /**
+     * 构建 Agent 提示词的简写重载版本。
+     * 委托给完整参数版本，budget 传 null。
+     * @param taskName 任务名称
+     * @param taskGoal 任务目标
+     * @param userPayload 用户输入数据
+     * @param responseContract 响应契约
+     * @param allowedTools 允许使用的工具列表
+     * @param requiredTools 必须使用的工具列表
+     * @param usedTools 已使用工具列表
+     * @param scratchpad 工具调用历史
+     * @return 构建好的提示词文本
+     */
     private String buildAgentPrompt(
             String taskName,
             String taskGoal,
@@ -638,6 +697,20 @@ public class LlmWorkspaceAgentService {
                 allowedTools, requiredTools, usedTools, scratchpad, null);
     }
 
+    /**
+     * 构建完整的 Agent 提示词，包含任务信息、工具描述、历史记录和响应契约。
+     * 将工具列表格式化为可读描述，拼接 scratchpad 历史，最终加入响应契约要求。
+     * @param taskName 任务名称
+     * @param taskGoal 任务目标
+     * @param userPayload 用户输入数据
+     * @param responseContract 响应契约
+     * @param allowedTools 允许使用的工具列表
+     * @param requiredTools 必须使用的工具列表
+     * @param usedTools 已使用工具列表
+     * @param scratchpad 工具调用历史
+     * @param budget 工具预算信息，可为 null
+     * @return 构建好的提示词文本
+     */
     private String buildAgentPrompt(
             String taskName,
             String taskGoal,

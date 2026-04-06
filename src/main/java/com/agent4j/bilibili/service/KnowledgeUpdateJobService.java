@@ -22,6 +22,12 @@ public class KnowledgeUpdateJobService {
     private final Map<String, Map<String, Object>> jobs = new ConcurrentHashMap<>();
     private volatile String activeJobId = "";
 
+    /**
+     * 创建知识更新任务服务。
+     *
+     * @param knowledgeSyncService 知识同步服务
+     * @param longTermMemoryService 长期记忆服务
+     */
     public KnowledgeUpdateJobService(
             KnowledgeSyncService knowledgeSyncService,
             LongTermMemoryService longTermMemoryService
@@ -30,6 +36,12 @@ public class KnowledgeUpdateJobService {
         this.longTermMemoryService = longTermMemoryService;
     }
 
+    /**
+     * 启动知识库更新任务。
+     *
+     * @param limit 每个板块抓取条数限制
+     * @return 任务信息
+     */
     public synchronized Map<String, Object> startKnowledgeUpdate(int limit) {
         if (!activeJobId.isBlank()) {
             Map<String, Object> active = jobs.get(activeJobId);
@@ -59,11 +71,22 @@ public class KnowledgeUpdateJobService {
         return Map.of("job", new LinkedHashMap<>(job), "already_running", false, "error", "");
     }
 
+    /**
+     * 获取指定任务的状态信息。
+     *
+     * @param jobId 任务 ID
+     * @return 任务信息，不存在则返回 null
+     */
     public Map<String, Object> getKnowledgeUpdateJob(String jobId) {
         Map<String, Object> job = jobs.get(jobId);
         return job == null ? null : new LinkedHashMap<>(job);
     }
 
+    /**
+     * 获取当前正在运行的知识更新任务。
+     *
+     * @return 任务信息，无运行中任务则返回 null
+     */
     public Map<String, Object> getActiveKnowledgeUpdateJob() {
         if (activeJobId.isBlank()) {
             return null;
@@ -71,6 +94,12 @@ public class KnowledgeUpdateJobService {
         return getKnowledgeUpdateJob(activeJobId);
     }
 
+    /**
+     * 执行知识更新任务。
+     *
+     * @param jobId 任务 ID
+     * @param limit 每个板块抓取条数限制
+     */
     private void runJob(String jobId, int limit) {
         try {
             Map<String, Object> result = knowledgeSyncService.updateKnowledgeBase(limit, progress -> updateJob(jobId, progress));
@@ -96,6 +125,12 @@ public class KnowledgeUpdateJobService {
         }
     }
 
+    /**
+     * 更新任务状态信息。
+     *
+     * @param jobId 任务 ID
+     * @param patch 要合并的状态补丁
+     */
     private void updateJob(String jobId, Map<String, Object> patch) {
         jobs.compute(jobId, (ignored, current) -> {
             Map<String, Object> target = current == null ? new LinkedHashMap<>() : new LinkedHashMap<>(current);

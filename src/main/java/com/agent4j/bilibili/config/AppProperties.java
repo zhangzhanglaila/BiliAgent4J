@@ -178,50 +178,110 @@ public class AppProperties {
         this.llmModel = llmModel;
     }
 
+    /**
+     * 获取 LLM 推理努力级别。
+     *
+     * @return 推理努力配置
+     */
     public String getLlmReasoningEffort() {
         return llmReasoningEffort;
     }
 
+    /**
+     * 设置 LLM 推理努力级别。
+     *
+     * @param llmReasoningEffort 推理努力配置
+     */
     public void setLlmReasoningEffort(String llmReasoningEffort) {
         this.llmReasoningEffort = llmReasoningEffort;
     }
 
+    /**
+     * 判断是否禁用 LLM 响应存储。
+     *
+     * @return 是否禁用
+     */
     public boolean isLlmDisableResponseStorage() {
         return llmDisableResponseStorage;
     }
 
+    /**
+     * 设置是否禁用 LLM 响应存储。
+     *
+     * @param llmDisableResponseStorage 是否禁用
+     */
     public void setLlmDisableResponseStorage(boolean llmDisableResponseStorage) {
         this.llmDisableResponseStorage = llmDisableResponseStorage;
     }
 
+    /**
+     * 判断是否启用 LangSmith 追踪。
+     *
+     * @return 是否启用
+     */
     public boolean isLangsmithTracing() {
         return langsmithTracing;
     }
 
+    /**
+     * 设置是否启用 LangSmith 追踪。
+     *
+     * @param langsmithTracing 是否启用
+     */
     public void setLangsmithTracing(boolean langsmithTracing) {
         this.langsmithTracing = langsmithTracing;
     }
 
+    /**
+     * 获取 LangSmith API Key。
+     *
+     * @return API Key
+     */
     public String getLangsmithApiKey() {
         return langsmithApiKey;
     }
 
+    /**
+     * 设置 LangSmith API Key。
+     *
+     * @param langsmithApiKey API Key
+     */
     public void setLangsmithApiKey(String langsmithApiKey) {
         this.langsmithApiKey = langsmithApiKey;
     }
 
+    /**
+     * 获取 LangSmith 项目名称。
+     *
+     * @return 项目名称
+     */
     public String getLangsmithProject() {
         return langsmithProject;
     }
 
+    /**
+     * 设置 LangSmith 项目名称。
+     *
+     * @param langsmithProject 项目名称
+     */
     public void setLangsmithProject(String langsmithProject) {
         this.langsmithProject = langsmithProject;
     }
 
+    /**
+     * 获取 LangSmith 端点地址。
+     *
+     * @return 端点地址
+     */
     public String getLangsmithEndpoint() {
         return langsmithEndpoint;
     }
 
+    /**
+     * 设置 LangSmith 端点地址。
+     *
+     * @param langsmithEndpoint 端点地址
+     */
     public void setLangsmithEndpoint(String langsmithEndpoint) {
         this.langsmithEndpoint = langsmithEndpoint;
     }
@@ -280,106 +340,236 @@ public class AppProperties {
         this.llmRetryBackoffSeconds = llmRetryBackoffSeconds;
     }
 
+    /**
+     * 获取 SerpAPI Key。
+     *
+     * @return API Key
+     */
     public String getSerpapiApiKey() {
         return serpapiApiKey;
     }
 
+    /**
+     * 设置 SerpAPI Key。
+     *
+     * @param serpapiApiKey API Key
+     */
     public void setSerpapiApiKey(String serpapiApiKey) {
         this.serpapiApiKey = serpapiApiKey;
     }
 
+    /**
+     * 获取 Tavily API Key。
+     *
+     * @return API Key
+     */
     public String getTavilyApiKey() {
         return tavilyApiKey;
     }
 
+    /**
+     * 设置 Tavily API Key。
+     *
+     * @param tavilyApiKey API Key
+     */
     public void setTavilyApiKey(String tavilyApiKey) {
         this.tavilyApiKey = tavilyApiKey;
     }
 
+    /**
+     * 获取 LangChain API Key。
+     *
+     * @return API Key
+     */
     public String getLangchainApiKey() {
         return langchainApiKey;
     }
 
+    /**
+     * 设置 LangChain API Key。
+     *
+     * @param langchainApiKey API Key
+     */
     public void setLangchainApiKey(String langchainApiKey) {
         this.langchainApiKey = langchainApiKey;
     }
 
+    /**
+     * 获取 LangChain 端点地址。
+     *
+     * @return 端点地址
+     */
     public String getLangchainEndpoint() {
         return langchainEndpoint;
     }
 
+    /**
+     * 设置 LangChain 端点地址。
+     *
+     * @param langchainEndpoint 端点地址
+     */
     public void setLangchainEndpoint(String langchainEndpoint) {
         this.langchainEndpoint = langchainEndpoint;
     }
 
+    /**
+     * 获取 LangChain 项目名称。
+     *
+     * @return 项目名称
+     */
     public String getLangchainProject() {
         return langchainProject;
     }
 
+    /**
+     * 设置 LangChain 项目名称。
+     *
+     * @param langchainProject 项目名称
+     */
     public void setLangchainProject(String langchainProject) {
         this.langchainProject = langchainProject;
     }
 
+    /**
+     * 判断是否后台执行 LangChain 回调。
+     *
+     * @return 是否后台执行
+     */
     public boolean isLangchainCallbacksBackground() {
         return langchainCallbacksBackground;
     }
 
+    /**
+     * 设置是否后台执行 LangChain 回调。
+     *
+     * @param langchainCallbacksBackground 是否后台执行
+     */
     public void setLangchainCallbacksBackground(boolean langchainCallbacksBackground) {
         this.langchainCallbacksBackground = langchainCallbacksBackground;
     }
 
+    /**
+     * 获取 LangChain 日志详细度。
+     *
+     * @return 日志详细度
+     */
     public String getLangchainVerbosity() {
         return langchainVerbosity;
     }
 
+    /**
+     * 设置 LangChain 日志详细度。
+     *
+     * @param langchainVerbosity 日志详细度
+     */
     public void setLangchainVerbosity(String langchainVerbosity) {
         this.langchainVerbosity = langchainVerbosity;
     }
 
+    /**
+     * 获取向量数据库路径。
+     *
+     * @return 存储路径
+     */
     public String getVectorDbPath() {
         return vectorDbPath;
     }
 
+    /**
+     * 设置向量数据库路径。
+     *
+     * @param vectorDbPath 存储路径
+     */
     public void setVectorDbPath(String vectorDbPath) {
         this.vectorDbPath = vectorDbPath;
     }
 
+    /**
+     * 获取 Embedding 模型名称。
+     *
+     * @return 模型名称
+     */
     public String getEmbeddingModelName() {
         return embeddingModelName;
     }
 
+    /**
+     * 设置 Embedding 模型名称。
+     *
+     * @param embeddingModelName 模型名称
+     */
     public void setEmbeddingModelName(String embeddingModelName) {
         this.embeddingModelName = embeddingModelName;
     }
 
+    /**
+     * 获取 Embedding 模型缓存目录。
+     *
+     * @return 缓存目录
+     */
     public String getEmbeddingCacheDir() {
         return embeddingCacheDir;
     }
 
+    /**
+     * 设置 Embedding 模型缓存目录。
+     *
+     * @param embeddingCacheDir 缓存目录
+     */
     public void setEmbeddingCacheDir(String embeddingCacheDir) {
         this.embeddingCacheDir = embeddingCacheDir;
     }
 
+    /**
+     * 获取 Embedding 服务地址。
+     *
+     * @return 服务 URL
+     */
     public String getEmbeddingServiceUrl() {
         return embeddingServiceUrl;
     }
 
+    /**
+     * 设置 Embedding 服务地址。
+     *
+     * @param embeddingServiceUrl 服务 URL
+     */
     public void setEmbeddingServiceUrl(String embeddingServiceUrl) {
         this.embeddingServiceUrl = embeddingServiceUrl;
     }
 
+    /**
+     * 获取 Chroma 向量数据库主机地址。
+     *
+     * @return 主机地址
+     */
     public String getChromaHost() {
         return chromaHost;
     }
 
+    /**
+     * 设置 Chroma 向量数据库主机地址。
+     *
+     * @param chromaHost 主机地址
+     */
     public void setChromaHost(String chromaHost) {
         this.chromaHost = chromaHost;
     }
 
+    /**
+     * 获取 Chroma 向量数据库端口。
+     *
+     * @return 端口号
+     */
     public int getChromaPort() {
         return chromaPort;
     }
 
+    /**
+     * 设置 Chroma 向量数据库端口。
+     *
+     * @param chromaPort 端口号
+     */
     public void setChromaPort(int chromaPort) {
         this.chromaPort = chromaPort;
     }

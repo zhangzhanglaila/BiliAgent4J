@@ -17,10 +17,21 @@ public class CodeInterpreterService {
 
     private final ObjectMapper objectMapper;
 
+    /**
+     * 创建代码解释器服务。
+     *
+     * @param objectMapper JSON 映射器
+     */
     public CodeInterpreterService(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 使用 JShell 执行 Java 代码并返回执行结果。
+     *
+     * @param payload 包含 code 和 variables 的载荷
+     * @return 执行结果，包含 stdout、result 和 error 字段
+     */
     public Map<String, Object> run(Map<String, Object> payload) {
         String code = stringValue(payload == null ? null : payload.get("code"));
         Map<String, Object> variables = payload != null && payload.get("variables") instanceof Map<?, ?> source
@@ -75,6 +86,12 @@ public class CodeInterpreterService {
         }
     }
 
+    /**
+     * 构建 JShell 预置代码，导入常用包并注入变量。
+     *
+     * @param variables 外部变量映射
+     * @return 预置代码行列表
+     */
     private List<String> buildPrelude(Map<String, Object> variables) {
         try {
             String json = objectMapper.writeValueAsString(variables == null ? Map.of() : variables)
@@ -91,6 +108,12 @@ public class CodeInterpreterService {
         }
     }
 
+    /**
+     * 在 JShell 中执行代码并检查结果。
+     *
+     * @param shell JShell 实例
+     * @param code 要执行的代码
+     */
     private void evaluate(JShell shell, String code) {
         List<SnippetEvent> events = shell.eval(code);
         for (SnippetEvent event : events) {
@@ -100,6 +123,12 @@ public class CodeInterpreterService {
         }
     }
 
+    /**
+     * 将原始 Map 转换为字符串键 Map。
+     *
+     * @param source 原始映射
+     * @return 字符串键映射
+     */
     private Map<String, Object> castMap(Map<?, ?> source) {
         Map<String, Object> result = new LinkedHashMap<>();
         for (Map.Entry<?, ?> entry : source.entrySet()) {
@@ -108,6 +137,12 @@ public class CodeInterpreterService {
         return result;
     }
 
+    /**
+     * 安全转换为字符串并去除首尾空白。
+     *
+     * @param value 原始值
+     * @return 字符串结果
+     */
     private String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
     }

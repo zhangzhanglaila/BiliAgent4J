@@ -115,6 +115,11 @@ public class LongTermMemoryService {
         );
     }
 
+    /**
+     * 从本地 JSON 文件加载长期记忆记录。
+     *
+     * @return 记录列表
+     */
     private List<Map<String, Object>> loadRecords() {
         lock.lock();
         try {
@@ -149,6 +154,11 @@ public class LongTermMemoryService {
         }
     }
 
+    /**
+     * 将记录持久化到本地 JSON 文件。
+     *
+     * @param records 要写入的记录列表
+     */
     private void writeRecords(List<Map<String, Object>> records) {
         lock.lock();
         try {
@@ -167,6 +177,12 @@ public class LongTermMemoryService {
         }
     }
 
+    /**
+     * 从记录中提取 metadata 字段。
+     *
+     * @param record 知识库记录
+     * @return metadata Map
+     */
     private Map<String, Object> metadataOf(Map<String, Object> record) {
         Object metadata = record.get("metadata");
         if (!(metadata instanceof Map<?, ?> source)) {
@@ -179,6 +195,12 @@ public class LongTermMemoryService {
         return result;
     }
 
+    /**
+     * 安全将对象转换为向量列表。
+     *
+     * @param raw 原始对象
+     * @return Double 列表
+     */
     private List<Double> readEmbedding(Object raw) {
         if (!(raw instanceof List<?> list)) {
             return List.of();
@@ -190,15 +212,33 @@ public class LongTermMemoryService {
         return embedding;
     }
 
+    /**
+     * 规范化用户 ID，空值转为 anonymous。
+     *
+     * @param userId 用户 ID
+     * @return 规范化后的用户 ID
+     */
     private String normalizeUserId(String userId) {
         String clean = stringValue(userId);
         return clean.isBlank() ? "anonymous" : clean;
     }
 
+    /**
+     * 安全转换为字符串。
+     *
+     * @param value 原始值
+     * @return 字符串结果
+     */
     private String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
     }
 
+    /**
+     * 安全转换为 double。
+     *
+     * @param value 原始值
+     * @return double 值
+     */
     private double doubleValue(Object value) {
         if (value instanceof Number number) {
             return number.doubleValue();

@@ -23,6 +23,12 @@ public class SearchToolService {
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
+    /**
+     * 创建搜索工具服务。
+     *
+     * @param properties 系统配置
+     * @param objectMapper JSON 映射器
+     */
     public SearchToolService(AppProperties properties, ObjectMapper objectMapper) {
         this.properties = properties;
         this.objectMapper = objectMapper;
@@ -31,6 +37,13 @@ public class SearchToolService {
                 .build();
     }
 
+    /**
+     * 使用 SerpAPI 搜索 Google 并返回结果。
+     *
+     * @param query 搜索关键词
+     * @param limit 返回结果数量上限
+     * @return 搜索结果
+     */
     public Map<String, Object> search(String query, int limit) {
         String cleanQuery = stringValue(query);
         if (cleanQuery.isBlank()) {
@@ -71,10 +84,22 @@ public class SearchToolService {
         }
     }
 
+    /**
+     * 对字符串进行 URL 编码。
+     *
+     * @param value 原始字符串
+     * @return 编码后的字符串
+     */
     private String encode(String value) {
         return URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8);
     }
 
+    /**
+     * 安全转换为字符串并去除首尾空白。
+     *
+     * @param value 原始值
+     * @return 字符串结果
+     */
     private String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
     }

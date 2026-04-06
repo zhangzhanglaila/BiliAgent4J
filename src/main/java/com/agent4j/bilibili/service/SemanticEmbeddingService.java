@@ -62,6 +62,10 @@ public class SemanticEmbeddingService {
 
     /**
      * 检查远程 embedding 服务是否可用。
+     * 向远程服务的 /health 端点发送请求，根据返回状态判断是否正常。
+     *
+     * @throws IOException 网络 IO 异常
+     * @throws InterruptedException 请求被中断
      */
     private void checkRemoteService() throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
@@ -118,7 +122,12 @@ public class SemanticEmbeddingService {
     }
 
     /**
-     * 调用远程 embedding 服务。
+     * 调用远程 embedding 服务生成向量。
+     *
+     * @param texts 文本列表
+     * @return 向量列表
+     * @throws IOException 网络 IO 异常
+     * @throws InterruptedException 请求被中断
      */
     private List<List<Double>> embedDocumentsRemote(List<String> texts) throws IOException, InterruptedException {
         Map<String, Object> payload = new LinkedHashMap<>();
