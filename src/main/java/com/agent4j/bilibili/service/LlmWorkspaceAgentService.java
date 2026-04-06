@@ -10,6 +10,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import org.springframework.stereotype.Service;
 
@@ -30,6 +33,17 @@ public class LlmWorkspaceAgentService {
         thread.setDaemon(true);
         return thread;
     });
+
+    // 工具超时配置（秒）
+    private static final double DEFAULT_TOOL_TIMEOUT_SECONDS = 30.0;
+    private final Map<String, Double> toolTimeouts = Map.of(
+            "web_search", 45.0,
+            "code_interpreter", 60.0,
+            "creator_briefing", 30.0,
+            "video_briefing", 30.0,
+            "hot_board_snapshot", 30.0,
+            "retrieval", 20.0
+    );
 
     public LlmWorkspaceAgentService(
             LlmClientService llmClientService,
@@ -168,10 +182,35 @@ public class LlmWorkspaceAgentService {
             boolean saveMemory,
             boolean enableReflection
     ) {
+        return runStructuredAdvanced(taskName, taskGoal, userPayload, responseContract,
+                allowedTools, requiredTools, requiredFinalKeys, maxSteps,
+                loadHistory, saveMemory, enableReflection, false);
+    }
+
+    /**
+     * 高级 LLM Agent 运行方法，支持工具预算和超时控制。
+     */
+    public Map<String, Object> runStructuredAdvanced(
+            String taskName,
+            String taskGoal,
+            Map<String, Object> userPayload,
+            String responseContract,
+            List<String> allowedTools,
+            List<String> requiredTools,
+            List<String> requiredFinalKeys,
+            int maxSteps,
+            boolean loadHistory,
+            boolean saveMemory,
+            boolean enableReflection,
+            boolean strictToolOrder
+    ) {
         llmClientService.requireAvailable();
         Map<String, Function<Map<String, Object>, Map<String, Object>>> tools = registeredTools();
         List<Map<String, Object>> scratchpad = new ArrayList<>();
         List<String> usedTools = new ArrayList<>();
+        Map<String, Integer> toolUsageCounts = new LinkedHashMap<>();
+        Map<String, Integer> repeatedActionInputs = new LinkedHashMap<>();
+        List<String> recentToolActions = new ArrayList<>();
         String memoryUserId = resolveMemoryUserId(taskName, userPayload);
         String queryText = buildQueryText(taskName, userPayload);
 
@@ -182,12 +221,11 @@ public class LlmWorkspaceAgentService {
             autoRetrieve(queryText, scratchpad, usedTools);
         }
 
-        String systemPrompt = """
-                你是 B 站创作工作台的 LLM Agent 中枢。
-                所有分析、判断、决策和生成都必须基于用户输入、历史观察和工具返回的信息实时完成。
-                优先利用已经提供的真实 payload，只有在确实需要补充案例、热点、外部公开信息或计算时再调工具。
-                当信息足够时，再输出最终 JSON。
-                """;
+        // 构建预算
+        Map<String, Object> budget = buildBudget(taskName, allowedTools, maxSteps);
+
+        String systemPrompt = buildSystemPrompt(taskName, taskGoal, userPayload, responseContract,
+                allowedTools, requiredTools, strictToolOrder, budget);
 
         for (int step = 0; step < maxSteps; step++) {
             String userPrompt = buildAgentPrompt(
@@ -198,7 +236,8 @@ public class LlmWorkspaceAgentService {
                     allowedTools,
                     requiredTools,
                     usedTools,
-                    scratchpad
+                    scratchpad,
+                    budget
             );
             JsonNode decision = llmClientService.invokeJsonRequired(systemPrompt, userPrompt);
             String action = JsonUtils.text(decision, "action").trim();
@@ -228,7 +267,7 @@ public class LlmWorkspaceAgentService {
                     continue;
                 }
                 if (enableReflection) {
-                    applyReflection(taskName, taskGoal, userPayload, responseContract, finalResult);
+                    applyReflectionAdvanced(taskName, taskGoal, userPayload, responseContract, finalResult, scratchpad, requiredFinalKeys);
                 }
                 finalResult.putIfAbsent("agent_trace", new ArrayList<>(usedTools));
                 finalResult.putIfAbsent("tool_observations", new ArrayList<>(scratchpad));
@@ -239,15 +278,35 @@ public class LlmWorkspaceAgentService {
                 return finalResult;
             }
 
+            // 检查非法工具
             if (!allowedTools.contains(action) || !tools.containsKey(action)) {
                 scratchpad.add(validationError("非法工具: " + action));
                 continue;
             }
 
+            // 检查必需工具顺序
+            String orderError = checkToolOrderError(action, requiredTools, usedTools, strictToolOrder);
+            if (!orderError.isEmpty()) {
+                scratchpad.add(toolObservation(action, actionInput, Map.of("error", orderError)));
+                continue;
+            }
+
+            // 检查工具预算
+            String budgetError = checkToolBudgetError(action, actionInput, budget,
+                    usedTools.size(), toolUsageCounts, repeatedActionInputs, recentToolActions);
+            if (!budgetError.isEmpty()) {
+                scratchpad.add(toolObservation(action, actionInput, Map.of("error", budgetError)));
+                continue;
+            }
+
+            // 执行工具（带超时）
             try {
-                Map<String, Object> observation = tools.get(action).apply(actionInput);
-                if (!usedTools.contains(action)) {
-                    usedTools.add(action);
+                Map<String, Object> observation = invokeToolWithTimeout(tools.get(action), action, actionInput);
+                usedTools.add(action);
+                toolUsageCounts.put(action, toolUsageCounts.getOrDefault(action, 0) + 1);
+                recentToolActions.add(action);
+                if (recentToolActions.size() > 5) {
+                    recentToolActions.remove(0);
                 }
                 scratchpad.add(toolObservation(action, actionInput, observation));
             } catch (Exception exception) {
@@ -256,6 +315,141 @@ public class LlmWorkspaceAgentService {
         }
 
         throw new IllegalStateException("LLM Agent 未能在限定步数内完成任务。");
+    }
+
+    /**
+     * 构建工具预算。
+     */
+    private Map<String, Object> buildBudget(String taskName, List<String> allowedTools, int maxSteps) {
+        Map<String, Object> budget = new LinkedHashMap<>();
+        budget.put("max_steps", Math.max(1, maxSteps));
+        budget.put("max_tool_calls", Math.max(1, maxSteps));
+        budget.put("repeat_action_limit", 2);
+
+        // per-tool limits
+        Map<String, Integer> toolLimits = new LinkedHashMap<>();
+        for (String tool : allowedTools) {
+            toolLimits.put(tool, Math.max(1, maxSteps));
+        }
+        budget.put("tool_limits", toolLimits);
+        return budget;
+    }
+
+    /**
+     * 构建系统提示词。
+     */
+    private String buildSystemPrompt(String taskName, String taskGoal, Map<String, Object> userPayload,
+            String responseContract, List<String> allowedTools, List<String> requiredTools,
+            boolean strictToolOrder, Map<String, Object> budget) {
+        StringBuilder prompt = new StringBuilder();
+        prompt.append("你是 B 站创作工作台的 LLM Agent 中枢。\n");
+        prompt.append("你必须采用 ReAct 范式：先基于用户输入和已有 observation 思考，再决定是否调用工具，最后输出结构化 JSON。\n");
+        prompt.append("所有判断都由你自主完成，不使用硬编码阈值，不依赖固定规则链。\n");
+        prompt.append("检索优先但不强制：当本地知识库可能包含历史经验、沉淀资料、案例或已知结构化信息时，优先考虑 retrieval。\n");
+        prompt.append("如果问题明显依赖最新公开信息，或 retrieval 返回的信息不足、不匹配、已过期，再调用 web_search。\n");
+
+        // 添加必需工具指引
+        if (!requiredTools.isEmpty()) {
+            prompt.append("你必须先调用工具获取信息，严禁直接输出 final 结果。\n");
+            prompt.append("本任务至少要调用这些工具：").append(requiredTools).append("。\n");
+            if (strictToolOrder) {
+                prompt.append("必须严格按顺序调用：").append(requiredTools).append("。\n");
+            }
+        }
+
+        prompt.append("严格遵守工具预算，不要为了凑步骤而无意义调用工具。\n");
+        return prompt.toString();
+    }
+
+    /**
+     * 检查工具顺序错误。
+     */
+    private String checkToolOrderError(String action, List<String> requiredTools,
+            List<String> usedTools, boolean strictOrder) {
+        if (!strictOrder || requiredTools.isEmpty() || "final".equals(action)) {
+            return "";
+        }
+        List<String> remaining = requiredTools.stream().filter(tool -> !usedTools.contains(tool)).toList();
+        if (remaining.isEmpty()) {
+            return "";
+        }
+        String expectedTool = remaining.get(0);
+        if (!action.equals(expectedTool)) {
+            return "当前必须先调用工具 " + expectedTool + "，然后才能继续调用 " + action + "。";
+        }
+        return "";
+    }
+
+    /**
+     * 检查工具预算错误。
+     */
+    private String checkToolBudgetError(String action, Map<String, Object> actionInput,
+            Map<String, Object> budget, int totalToolCalls,
+            Map<String, Integer> toolUsageCounts, Map<String, Integer> repeatedActionInputs,
+            List<String> recentToolActions) {
+
+        int maxToolCalls = ((Number) budget.getOrDefault("max_tool_calls", 1)).intValue();
+        if (totalToolCalls >= maxToolCalls) {
+            return "工具调用总次数已达到上限 " + maxToolCalls + "，请基于现有 observation 完成判断。";
+        }
+
+        @SuppressWarnings("unchecked")
+        Map<String, Integer> toolLimits = (Map<String, Integer>) budget.getOrDefault("tool_limits", new LinkedHashMap<>());
+        int toolLimit = toolLimits.getOrDefault(action, maxToolCalls);
+        if (toolUsageCounts.getOrDefault(action, 0) >= toolLimit) {
+            return "工具 " + action + " 调用次数已达上限 " + toolLimit + "，请改用其他工具或直接输出 final。";
+        }
+
+        int repeatLimit = ((Number) budget.getOrDefault("repeat_action_limit", 1)).intValue();
+        String actionSignature = action + ":" + normalizeActionInput(actionInput);
+        if (repeatedActionInputs.getOrDefault(actionSignature, 0) >= repeatLimit) {
+            return "工具 " + action + " 使用相同参数重复调用已达上限 " + repeatLimit + "，请调整 query 或直接输出 final。";
+        }
+
+        if (recentToolActions.size() >= repeatLimit &&
+                recentToolActions.stream().skip(recentToolActions.size() - repeatLimit).allMatch(a -> a.equals(action))) {
+            return "工具 " + action + " 连续重复调用已达上限 " + repeatLimit + "，请整合已有 observation 后再决策。";
+        }
+
+        return "";
+    }
+
+    /**
+     * 规范化 action input 用于比较。
+     */
+    private String normalizeActionInput(Map<String, Object> actionInput) {
+        try {
+            return objectMapper.writeValueAsString(actionInput);
+        } catch (Exception e) {
+            return String.valueOf(actionInput);
+        }
+    }
+
+    /**
+     * 带超时的工具调用。
+     */
+    private Map<String, Object> invokeToolWithTimeout(
+            Function<Map<String, Object>, Map<String, Object>> toolHandler,
+            String toolName,
+            Map<String, Object> actionInput) throws Exception {
+
+        double timeoutSeconds = toolTimeouts.getOrDefault(toolName, DEFAULT_TOOL_TIMEOUT_SECONDS);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        Future<Map<String, Object>> future = executor.submit(() -> toolHandler.apply(actionInput));
+
+        try {
+            return future.get((long) timeoutSeconds, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+            future.cancel(true);
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("error", "tool_timeout:" + toolName);
+            result.put("timed_out", true);
+            result.put("tool", toolName);
+            result.put("timeout_seconds", timeoutSeconds);
+            return result;
+        } finally {
+            executor.shutdownNow();
+        }
     }
 
     private void autoLoadHistory(String memoryUserId, String queryText, List<Map<String, Object>> scratchpad) {
@@ -288,31 +482,95 @@ public class LlmWorkspaceAgentService {
             String responseContract,
             Map<String, Object> finalResult
     ) {
+        applyReflectionAdvanced(taskName, taskGoal, userPayload, responseContract, finalResult, List.of(), List.of());
+    }
+
+    /**
+     * 高级 Reflection：完整的结果质检与可能重写。
+     */
+    private void applyReflectionAdvanced(
+            String taskName,
+            String taskGoal,
+            Map<String, Object> userPayload,
+            String responseContract,
+            Map<String, Object> finalResult,
+            List<Map<String, Object>> scratchpad,
+            List<String> requiredFinalKeys
+    ) {
         try {
             JsonNode review = llmClientService.invokeJsonRequired(
-                    "你是结果质检助手。只检查字段完整性、逻辑自洽性和是否偏离任务目标，不要重写无关内容。",
-                    "任务名称: " + taskName + "\n"
-                            + "任务目标: " + taskGoal + "\n"
-                            + "用户输入: " + JsonUtils.write(objectMapper, userPayload) + "\n"
-                            + "结果契约: " + responseContract + "\n"
-                            + "当前结果: " + JsonUtils.write(objectMapper, finalResult) + "\n\n"
-                            + "返回 JSON，对象字段仅包含 issues(字符串数组) 和 optional_patches(对象，可为空)。"
+                    "你是一个严格的 B 站创作结果审查与重写助手，只返回 JSON。",
+                    buildReflectionPrompt(taskName, taskGoal, userPayload, responseContract, finalResult, scratchpad)
             );
-            List<String> issues = readStringList(review.get("issues"));
-            if (!issues.isEmpty()) {
-                finalResult.put("reflection_issues", issues);
+
+            if (review == null) {
+                return;
             }
-            if (review.get("optional_patches") != null && review.get("optional_patches").isObject()) {
-                Map<String, Object> patch = objectMapper.convertValue(
-                        review.get("optional_patches"),
-                        objectMapper.getTypeFactory().constructMapType(LinkedHashMap.class, String.class, Object.class)
+
+            boolean passed = review.has("pass") && review.get("pass").asBoolean(false);
+            if (passed) {
+                return; // 通过，不需要修改
+            }
+
+            // 尝试使用重写的结果
+            JsonNode rewrittenNode = review.get("rewritten_final");
+            if (rewrittenNode != null && rewrittenNode.isObject()) {
+                List<String> rewriteMissing = validateFinalKeys(
+                        objectMapper.convertValue(rewrittenNode, LinkedHashMap.class),
+                        requiredFinalKeys
                 );
-                for (Map.Entry<String, Object> entry : patch.entrySet()) {
-                    finalResult.putIfAbsent(entry.getKey(), entry.getValue());
+
+                if (rewriteMissing.isEmpty()) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> rewritten = new LinkedHashMap<>(
+                            objectMapper.convertValue(rewrittenNode, LinkedHashMap.class)
+                    );
+
+                    // 添加反思问题
+                    if (review.has("issues") && review.get("issues").isArray()) {
+                        List<String> issues = new ArrayList<>();
+                        review.get("issues").forEach(n -> issues.add(n.asText()));
+                        rewritten.put("reflection_issues", issues);
+                    }
+
+                    // 替换 finalResult
+                    finalResult.clear();
+                    finalResult.putAll(rewritten);
                 }
             }
         } catch (Exception ignored) {
         }
+    }
+
+    /**
+     * 构建反思 prompt。
+     */
+    private String buildReflectionPrompt(String taskName, String taskGoal,
+            Map<String, Object> userPayload, String responseContract,
+            Map<String, Object> finalResult, List<Map<String, Object>> scratchpad) {
+        return "你是结果质检器，需要判断下面这个 JSON 最终结果是否满足任务要求。\n"
+                + "如果满足，pass 返回 true。\n"
+                + "如果不满足，pass 返回 false，并直接给出 rewritten_final。\n"
+                + "只返回 JSON：{pass:boolean, issues:string[], rewritten_final:object|null}\n\n"
+                + "任务名称：" + taskName + "\n"
+                + "任务目标：" + taskGoal + "\n"
+                + "用户输入：" + JsonUtils.write(objectMapper, userPayload) + "\n"
+                + "响应契约：" + responseContract + "\n"
+                + "工具观察：" + scratchpadBlock(scratchpad) + "\n"
+                + "候选最终结果：" + JsonUtils.write(objectMapper, finalResult);
+    }
+
+    /**
+     * 验证最终结果是否包含必需字段。
+     */
+    private List<String> validateFinalKeys(Map<String, Object> finalResult, List<String> requiredFinalKeys) {
+        List<String> missing = new ArrayList<>();
+        for (String key : requiredFinalKeys) {
+            if (!finalResult.containsKey(key)) {
+                missing.add(key);
+            }
+        }
+        return missing;
     }
 
     private void saveMemoryAsync(String memoryUserId, String taskName, Map<String, Object> userPayload, Map<String, Object> finalResult) {
@@ -376,15 +634,52 @@ public class LlmWorkspaceAgentService {
             List<String> usedTools,
             List<Map<String, Object>> scratchpad
     ) {
+        return buildAgentPrompt(taskName, taskGoal, userPayload, responseContract,
+                allowedTools, requiredTools, usedTools, scratchpad, null);
+    }
+
+    private String buildAgentPrompt(
+            String taskName,
+            String taskGoal,
+            Map<String, Object> userPayload,
+            String responseContract,
+            List<String> allowedTools,
+            List<String> requiredTools,
+            List<String> usedTools,
+            List<Map<String, Object>> scratchpad,
+            Map<String, Object> budget
+    ) {
         List<String> toolLines = allowedTools.stream().map(tool -> "- " + tool + ": " + toolDescription(tool)).toList();
-        return "任务名称: " + taskName + "\n"
-                + "任务目标: " + taskGoal + "\n"
-                + "用户输入: " + JsonUtils.write(objectMapper, userPayload) + "\n\n"
-                + "可用工具:\n" + String.join("\n", toolLines) + "\n\n"
-                + "必须至少使用的工具: " + JsonUtils.write(objectMapper, requiredTools) + "\n"
-                + "已经使用的工具: " + JsonUtils.write(objectMapper, usedTools) + "\n\n"
-                + "历史观察:\n" + scratchpadBlock(scratchpad) + "\n\n"
-                + """
+        StringBuilder prompt = new StringBuilder();
+        prompt.append("任务名称: ").append(taskName).append("\n");
+        prompt.append("任务目标: ").append(taskGoal).append("\n");
+        prompt.append("用户输入: ").append(JsonUtils.write(objectMapper, userPayload)).append("\n\n");
+        prompt.append("可用工具:\n").append(String.join("\n", toolLines)).append("\n\n");
+
+        // 添加工具预算信息
+        if (budget != null) {
+            prompt.append("工具预算:\n");
+            prompt.append("- max_steps: ").append(budget.getOrDefault("max_steps", 1)).append("\n");
+            prompt.append("- max_tool_calls: ").append(budget.getOrDefault("max_tool_calls", 1)).append("\n");
+            prompt.append("- repeat_action_limit: ").append(budget.getOrDefault("repeat_action_limit", 1)).append("\n");
+            @SuppressWarnings("unchecked")
+            Map<String, Integer> toolLimits = (Map<String, Integer>) budget.getOrDefault("tool_limits", new LinkedHashMap<>());
+            prompt.append("- tool_limits: ");
+            if (toolLimits.isEmpty()) {
+                prompt.append("none");
+            } else {
+                prompt.append(toolLimits.entrySet().stream()
+                        .map(e -> e.getKey() + "<=" + e.getValue())
+                        .reduce((a, b) -> a + ", " + b)
+                        .orElse("none"));
+            }
+            prompt.append("\n\n");
+        }
+
+        prompt.append("必须至少使用的工具: ").append(JsonUtils.write(objectMapper, requiredTools)).append("\n");
+        prompt.append("已经使用的工具: ").append(JsonUtils.write(objectMapper, usedTools)).append("\n\n");
+        prompt.append("历史观察:\n").append(scratchpadBlock(scratchpad)).append("\n\n");
+        prompt.append("""
                         你必须只返回 JSON 对象，格式如下：
                         {
                           "action": "工具名 或 final",
@@ -396,7 +691,8 @@ public class LlmWorkspaceAgentService {
                         1. 如果信息还不够，action 必须是某个工具名，final 必须是 null。
                         2. 如果 action=final，final 必须完整满足下面的响应契约。
                         3. 不要输出 markdown，不要输出解释，不要输出多余字段。
-                        """ + "\n\n最终响应契约:\n" + responseContract;
+                        """).append("\n\n最终响应契约:\n").append(responseContract);
+        return prompt.toString();
     }
 
     private String scratchpadBlock(List<Map<String, Object>> scratchpad) {

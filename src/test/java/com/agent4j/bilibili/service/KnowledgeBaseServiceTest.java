@@ -14,7 +14,14 @@ class KnowledgeBaseServiceTest {
 
     @Test
     void addDocumentAndRetrieveReturnsRelevantMatch() throws Exception {
-        KnowledgeBaseService service = new KnowledgeBaseService(appProperties(), new ObjectMapper(), new LocalEmbeddingService());
+        AppProperties properties = appProperties();
+        ObjectMapper objectMapper = new ObjectMapper();
+        LocalEmbeddingService localEmbeddingService = new LocalEmbeddingService();
+        com.agent4j.bilibili.vectorstore.ChromaVectorStore chromaVectorStore =
+                new com.agent4j.bilibili.vectorstore.ChromaVectorStore(properties, objectMapper);
+        SemanticEmbeddingService semanticEmbeddingService =
+                new SemanticEmbeddingService(localEmbeddingService, properties, objectMapper);
+        KnowledgeBaseService service = new KnowledgeBaseService(properties, objectMapper, localEmbeddingService, chromaVectorStore, semanticEmbeddingService);
 
         Map<String, Object> result = service.addDocument(new KnowledgeBaseService.KnowledgeDocument(
                 "doc:ai-playbook",

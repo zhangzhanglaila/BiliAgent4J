@@ -21,9 +21,20 @@ import static org.mockito.Mockito.mock;
 
 class KnowledgeSyncServiceTest {
 
+    private KnowledgeBaseService createKnowledgeBaseService() {
+        AppProperties properties = appProperties();
+        ObjectMapper objectMapper = new ObjectMapper();
+        LocalEmbeddingService localEmbeddingService = new LocalEmbeddingService();
+        com.agent4j.bilibili.vectorstore.ChromaVectorStore chromaVectorStore =
+                new com.agent4j.bilibili.vectorstore.ChromaVectorStore(properties, objectMapper);
+        SemanticEmbeddingService semanticEmbeddingService =
+                new SemanticEmbeddingService(localEmbeddingService, properties, objectMapper);
+        return new KnowledgeBaseService(properties, objectMapper, localEmbeddingService, chromaVectorStore, semanticEmbeddingService);
+    }
+
     @Test
     void ingestUploadedDocxFileParsesReadableText() throws Exception {
-        KnowledgeBaseService knowledgeBaseService = new KnowledgeBaseService(appProperties(), new ObjectMapper(), new LocalEmbeddingService());
+        KnowledgeBaseService knowledgeBaseService = createKnowledgeBaseService();
         KnowledgeSyncService service = new KnowledgeSyncService(
                 mock(TopicDataService.class),
                 knowledgeBaseService,
@@ -45,7 +56,7 @@ class KnowledgeSyncServiceTest {
     @Test
     void ingestUploadedPdfFileParsesReadableText() throws Exception {
         System.setProperty("pdfbox.fontcache", testWorkDir("pdfbox-cache").toString());
-        KnowledgeBaseService knowledgeBaseService = new KnowledgeBaseService(appProperties(), new ObjectMapper(), new LocalEmbeddingService());
+        KnowledgeBaseService knowledgeBaseService = createKnowledgeBaseService();
         KnowledgeSyncService service = new KnowledgeSyncService(
                 mock(TopicDataService.class),
                 knowledgeBaseService,

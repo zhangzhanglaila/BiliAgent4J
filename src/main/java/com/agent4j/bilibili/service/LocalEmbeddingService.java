@@ -65,6 +65,15 @@ public class LocalEmbeddingService {
         return overlap / (double) Math.max(queryTokens.size(), 1);
     }
 
+    /**
+     * 获取嵌入向量的维度。
+     *
+     * @return 向量维度
+     */
+    public int dimension() {
+        return DEFAULT_DIMENSION;
+    }
+
     private List<Double> embed(String text) {
         double[] vector = new double[DEFAULT_DIMENSION];
         for (String token : keywordTokens(text)) {

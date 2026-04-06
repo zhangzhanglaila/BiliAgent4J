@@ -11,8 +11,11 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.openai.OpenAiChatModel;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -299,5 +302,63 @@ public class LlmClientService {
         } catch (InterruptedException ignored) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    /**
+     * 通过 PowerShell 调用 HTTP API。
+     * 当 Python sockets 在某些 Windows 环境被阻止时使用此备选方案。
+     *
+     * @param endpoint API 端点
+     * @param payload 请求体
+     * @return 响应文本
+     */
+    private String invokeViaPowerShellHttp(String endpoint, Map<String, Object> payload) {
+        try {
+            String jsonPayload = objectMapper.writeValueAsString(payload);
+            // PowerShell 脚本：使用 Invoke-RestMethod 调用 API
+            String psScript = String.format(
+                    "$headers = @{'Content-Type'='application/json'}; "
+                            + "$body = '%s' | ConvertTo-Json -Compress; "
+                            + "$response = Invoke-RestMethod -Uri '%s' -Method Post -Headers $headers -Body $body -TimeoutSec 60; "
+                            + "$response | ConvertTo-Json -Compress",
+                    jsonPayload.replace("'", "''"),
+                    endpoint
+            );
+
+            ProcessBuilder pb = new ProcessBuilder(
+                    "powershell", "-NoProfile", "-NonInteractive", "-Command", psScript
+            );
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+
+            StringBuilder output = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line);
+                }
+            }
+
+            int exitCode = process.waitFor();
+            if (exitCode != 0) {
+                throw new RuntimeException("PowerShell HTTP fallback failed with exit code: " + exitCode);
+            }
+
+            return output.toString().trim();
+        } catch (Exception e) {
+            throw new RuntimeException("PowerShell HTTP fallback failed: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 判断是否应该使用 PowerShell fallback。
+     * 当检测到 Windows socket 问题时返回 true。
+     */
+    private boolean shouldUsePowerShellFallback(Exception exception) {
+        String message = exception.getMessage() != null ? exception.getMessage().toLowerCase() : "";
+        return message.contains("connection refused")
+                || message.contains("connect timed out")
+                || message.contains("network is unreachable")
+                || message.contains("permission denied");
     }
 }

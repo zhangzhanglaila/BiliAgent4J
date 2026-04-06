@@ -1,6 +1,7 @@
 package com.agent4j.bilibili.service;
 
 import com.agent4j.bilibili.config.AppProperties;
+import com.agent4j.bilibili.vectorstore.ChromaVectorStore;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -30,6 +31,8 @@ public class KnowledgeBaseService {
 
     private final ObjectMapper objectMapper;
     private final LocalEmbeddingService embeddingService;
+    private final ChromaVectorStore chromaVectorStore;
+    private final SemanticEmbeddingService semanticEmbeddingService;
     private final Path persistDirectory;
     private final Path fallbackStorePath;
     private final ReentrantLock fallbackLock = new ReentrantLock();
@@ -37,10 +40,14 @@ public class KnowledgeBaseService {
     public KnowledgeBaseService(
             AppProperties properties,
             ObjectMapper objectMapper,
-            LocalEmbeddingService embeddingService
+            LocalEmbeddingService embeddingService,
+            ChromaVectorStore chromaVectorStore,
+            SemanticEmbeddingService semanticEmbeddingService
     ) {
         this.objectMapper = objectMapper;
         this.embeddingService = embeddingService;
+        this.chromaVectorStore = chromaVectorStore;
+        this.semanticEmbeddingService = semanticEmbeddingService;
         this.persistDirectory = Path.of(properties.getVectorDbPath());
         this.fallbackStorePath = this.persistDirectory.resolve("bilibili_knowledge__fallback_store.json");
         try {
@@ -58,18 +65,22 @@ public class KnowledgeBaseService {
 
     public Map<String, Object> backendStatus() {
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("available", true);
-        payload.put("backend", "json_fallback");
-        payload.put("backend_detail", "java_local_json_vector_store");
+        Map<String, Object> chromaStatus = chromaVectorStore.backendStatus();
+
+        payload.put("available", chromaVectorStore.isAvailable() || true); // fallback 总是可用
+        payload.put("backend", chromaVectorStore.isAvailable() ? "chroma_http" : "json_fallback");
+        payload.put("backend_detail", chromaStatus.getOrDefault("backend_detail", "java_local_json_vector_store"));
         payload.put("persist_directory", persistDirectory.toString());
         payload.put("collection_name", "bilibili_knowledge");
         payload.put("document_count", count());
-        payload.put("init_error", "");
-        payload.put("embedding_provider", "deterministic_fallback");
-        payload.put("embedding_model", "java_local_deterministic");
-        payload.put("embedding_fallback", true);
-        payload.put("embedding_error", "");
+        payload.put("init_error", chromaStatus.getOrDefault("init_error", ""));
+        payload.put("embedding_provider", semanticEmbeddingService.getProvider());
+        payload.put("embedding_model", semanticEmbeddingService.getModelName());
+        payload.put("embedding_fallback", semanticEmbeddingService.isUsingFallback());
+        payload.put("embedding_error", semanticEmbeddingService.getLoadError());
         payload.put("last_updated_at", lastUpdatedAt());
+        payload.put("chroma_available", chromaVectorStore.isAvailable());
+        payload.put("chroma_status", chromaStatus);
         return payload;
     }
 

@@ -53,9 +53,18 @@ public class AppProperties {
     private int llmMaxRetries = 2;
     private double llmRetryBackoffSeconds = 1.6;
     private String serpapiApiKey = "";
+    private String tavilyApiKey = "";
+    private String langchainApiKey = "";
+    private String langchainEndpoint = "";
+    private String langchainProject = "bilibili-hot-rag";
+    private boolean langchainCallbacksBackground = true;
+    private String langchainVerbosity = "";
     private String vectorDbPath = "./vector_db";
     private String embeddingModelName = "BAAI/bge-small-zh-v1.5";
     private String embeddingCacheDir = "./model_cache";
+    private String embeddingServiceUrl = "http://localhost:8001";
+    private String chromaHost = "localhost";
+    private int chromaPort = 8000;
     private String biliSessdata = "";
     private String biliBiliJct = "";
     private String defaultPartition = "knowledge";
@@ -279,6 +288,54 @@ public class AppProperties {
         this.serpapiApiKey = serpapiApiKey;
     }
 
+    public String getTavilyApiKey() {
+        return tavilyApiKey;
+    }
+
+    public void setTavilyApiKey(String tavilyApiKey) {
+        this.tavilyApiKey = tavilyApiKey;
+    }
+
+    public String getLangchainApiKey() {
+        return langchainApiKey;
+    }
+
+    public void setLangchainApiKey(String langchainApiKey) {
+        this.langchainApiKey = langchainApiKey;
+    }
+
+    public String getLangchainEndpoint() {
+        return langchainEndpoint;
+    }
+
+    public void setLangchainEndpoint(String langchainEndpoint) {
+        this.langchainEndpoint = langchainEndpoint;
+    }
+
+    public String getLangchainProject() {
+        return langchainProject;
+    }
+
+    public void setLangchainProject(String langchainProject) {
+        this.langchainProject = langchainProject;
+    }
+
+    public boolean isLangchainCallbacksBackground() {
+        return langchainCallbacksBackground;
+    }
+
+    public void setLangchainCallbacksBackground(boolean langchainCallbacksBackground) {
+        this.langchainCallbacksBackground = langchainCallbacksBackground;
+    }
+
+    public String getLangchainVerbosity() {
+        return langchainVerbosity;
+    }
+
+    public void setLangchainVerbosity(String langchainVerbosity) {
+        this.langchainVerbosity = langchainVerbosity;
+    }
+
     public String getVectorDbPath() {
         return vectorDbPath;
     }
@@ -301,6 +358,30 @@ public class AppProperties {
 
     public void setEmbeddingCacheDir(String embeddingCacheDir) {
         this.embeddingCacheDir = embeddingCacheDir;
+    }
+
+    public String getEmbeddingServiceUrl() {
+        return embeddingServiceUrl;
+    }
+
+    public void setEmbeddingServiceUrl(String embeddingServiceUrl) {
+        this.embeddingServiceUrl = embeddingServiceUrl;
+    }
+
+    public String getChromaHost() {
+        return chromaHost;
+    }
+
+    public void setChromaHost(String chromaHost) {
+        this.chromaHost = chromaHost;
+    }
+
+    public int getChromaPort() {
+        return chromaPort;
+    }
+
+    public void setChromaPort(int chromaPort) {
+        this.chromaPort = chromaPort;
     }
 
     /**

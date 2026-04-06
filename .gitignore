@@ -4,3 +4,5 @@ target/
 *.db
 *.log
 .env
+.env.example
+.claude/

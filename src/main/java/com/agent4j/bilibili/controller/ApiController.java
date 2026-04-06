@@ -1,16 +1,21 @@
 package com.agent4j.bilibili.controller;
 
-import com.agent4j.bilibili.service.LlmClientService;
+import com.agent4j.bilibili.service.ChatSessionService;
 import com.agent4j.bilibili.service.KnowledgeBaseService;
 import com.agent4j.bilibili.service.KnowledgeSyncService;
 import com.agent4j.bilibili.service.KnowledgeUpdateJobService;
 import com.agent4j.bilibili.service.LongTermMemoryService;
+import com.agent4j.bilibili.service.LlmClientService;
 import com.agent4j.bilibili.service.RuntimeInfoService;
+import com.agent4j.bilibili.service.SseEmitterService;
 import com.agent4j.bilibili.service.WorkspaceService;
 import com.agent4j.bilibili.web.ApiResponse;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -19,9 +24,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
 @RequestMapping("/api")
@@ -34,6 +40,13 @@ public class ApiController {
     private final KnowledgeSyncService knowledgeSyncService;
     private final LongTermMemoryService longTermMemoryService;
     private final KnowledgeUpdateJobService knowledgeUpdateJobService;
+    private final ChatSessionService chatSessionService;
+    private final SseEmitterService sseEmitterService;
+    private final ExecutorService sseExecutor = Executors.newCachedThreadPool(r -> {
+        Thread t = new Thread(r, "sse-task");
+        t.setDaemon(true);
+        return t;
+    });
 
     /**
      * 创建 API 控制器并注入依赖
@@ -48,7 +61,9 @@ public class ApiController {
             KnowledgeBaseService knowledgeBaseService,
             KnowledgeSyncService knowledgeSyncService,
             LongTermMemoryService longTermMemoryService,
-            KnowledgeUpdateJobService knowledgeUpdateJobService
+            KnowledgeUpdateJobService knowledgeUpdateJobService,
+            ChatSessionService chatSessionService,
+            SseEmitterService sseEmitterService
     ) {
         this.workspaceService = workspaceService;
         this.llmClientService = llmClientService;
@@ -57,6 +72,8 @@ public class ApiController {
         this.knowledgeSyncService = knowledgeSyncService;
         this.longTermMemoryService = longTermMemoryService;
         this.knowledgeUpdateJobService = knowledgeUpdateJobService;
+        this.chatSessionService = chatSessionService;
+        this.sseEmitterService = sseEmitterService;
     }
 
     /**
@@ -297,6 +314,98 @@ public class ApiController {
                 String.valueOf(body.getOrDefault("style", "干货")),
                 String.valueOf(body.getOrDefault("topic", ""))
         ));
+    }
+
+    // ==================== Chat Session 端点 ====================
+
+    /**
+     * 获取所有聊天会话列表。
+     */
+    @GetMapping("/chat/sessions")
+    public ApiResponse<List<Map<String, Object>>> listChatSessions() {
+        return ApiResponse.success(chatSessionService.listSessions());
+    }
+
+    /**
+     * 获取指定会话的详情。
+     */
+    @GetMapping("/chat/sessions/{sessionId}")
+    public ApiResponse<Map<String, Object>> getChatSession(@PathVariable("sessionId") String sessionId) {
+        Map<String, Object> session = chatSessionService.getSession(sessionId);
+        if (session == null) {
+            throw new IllegalArgumentException("未找到对应的会话。");
+        }
+        return ApiResponse.success(session);
+    }
+
+    /**
+     * 删除指定会话。
+     */
+    @PostMapping("/chat/sessions/{sessionId}/delete")
+    public ApiResponse<Map<String, Object>> deleteChatSession(@PathVariable("sessionId") String sessionId) {
+        chatSessionService.deleteSession(sessionId);
+        return ApiResponse.success(Map.of("deleted", true, "session_id", sessionId));
+    }
+
+    /**
+     * 保存聊天会话。
+     */
+    @PostMapping("/chat/sessions/{sessionId}")
+    public ApiResponse<Map<String, Object>> saveChatSession(
+            @PathVariable("sessionId") String sessionId,
+            @RequestBody Map<String, Object> body
+    ) {
+        String firstQuestion = String.valueOf(body.getOrDefault("first_question", ""));
+        @SuppressWarnings("unchecked")
+        List<Map<String, String>> history = (List<Map<String, String>>) body.getOrDefault("history", List.of());
+        int historyLimit = readInt(body.get("history_limit"), 50, 1, 200);
+        List<Map<String, String>> normalizedHistory = chatSessionService.normalizeHistory(history, historyLimit);
+        chatSessionService.saveSession(sessionId, firstQuestion, normalizedHistory);
+        return ApiResponse.success(Map.of("saved", true, "session_id", sessionId));
+    }
+
+    /**
+     * 获取 SSE 流式分析任务状态。
+     */
+    @GetMapping("/module-analyze/jobs/{jobId}/events")
+    public SseEmitter sseModuleAnalyzeJobEvents(@PathVariable("jobId") String jobId) {
+        SseEmitter emitter = sseEmitterService.createEmitter(jobId);
+        return emitter;
+    }
+
+    /**
+     * 启动异步视频分析任务。
+     */
+    @PostMapping("/module-analyze/start")
+    public ApiResponse<Map<String, Object>> moduleAnalyzeStart(@RequestBody Map<String, Object> body) {
+        String url = String.valueOf(body.getOrDefault("url", "")).trim();
+        if (url.isBlank()) {
+            throw new IllegalArgumentException("请先输入 B 站视频链接");
+        }
+        String jobId = chatSessionService.generateSessionId();
+
+        // 异步执行分析
+        sseExecutor.execute(() -> {
+            try {
+                Map<String, Object> result = workspaceService.moduleAnalyze(body);
+                sseEmitterService.sendComplete(jobId, result);
+            } catch (Exception e) {
+                sseEmitterService.sendError(jobId, e.getMessage());
+            }
+        });
+
+        return ApiResponse.success(Map.of("job_id", jobId, "status", "started"));
+    }
+
+    /**
+     * 获取异步分析任务状态。
+     */
+    @GetMapping("/module-analyze/jobs/{jobId}")
+    public ApiResponse<Map<String, Object>> moduleAnalyzeJob(@PathVariable("jobId") String jobId) {
+        if (!sseEmitterService.hasActiveEmitter(jobId)) {
+            return ApiResponse.success(Map.of("job_id", jobId, "status", "not_found"));
+        }
+        return ApiResponse.success(Map.of("job_id", jobId, "status", "running"));
     }
 
     /**
